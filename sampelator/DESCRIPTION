@@ -1,0 +1,12 @@
+Package: sampelator
+Maintainer: Machteld Varewyck <machteld.varewyck@openanalytics.eu>
+License: MIT
+Title: Sample Size Computations for Sampling Designs at EFSA
+Type: Package
+Author: Machteld Varewyck
+Description: Perform Sample Size Computations for Sampling Designs at EFSA.
+Version: 0.0.23
+Date: 2016-04-15
+Imports:
+    rriskDistributions, shiny, ggplot2
+RoxygenNote: 5.0.1
