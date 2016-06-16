@@ -1,0 +1,14 @@
+"Production Area EU Code","Member State","FAO","Region","Name","Code","Class","Active","Production Year","Production Value","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Annual Production","Production Class","MonthInfor"
+"PAIT1","Italy",NA,"FVG","Tagliamento 09UD (natural bed of clams, Ostrey gathered accidentally)","600015","A","Y","2014","Kg","yes","yes","yes","yes","yes","yes","no","no","no","yes","yes","yes",500,NA,9
+"PAIT2","Italy",NA,"FVG","Grado Esterno 13GO","600005","A","Y","2014","Kg","yes","no","yes","yes","yes","yes","yes","no","no","no","no","yes",NA,NA,7
+"PAIT4","Italy","Sardinia (Division 37.1.3)","Liguria","DIGA FORANEA INTERNA LEVANTE","015SP660","B","Y","2014","Kg","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes",18000,NA,12
+"PAIT7","Italy","Adriatic (Division 37.2.1)","Puglia","Foce Capoiale Vieste","S.A.2.2","A","Y","2014","Kg","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes",5000,NA,12
+"PAIT8","Italy","Adriatic (Division 37.2.1)","Puglia","Foce Capoiale Vieste","S.A.2.4","A","Y","2014","Kg",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+"PAIT10","Italy","Eastern Mediterranean (Subarea 37.3)","Sardegna","Stagno di Tortolì ",NA,"B","Y","2014","Kg","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes",3690,NA,12
+"PAIT11","Italy","Eastern Mediterranean (Subarea 37.3)","Sardegna","Stagno di Feraxi",NA,"B","Y","2014","Kg",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+"PAIT12","Italy","Eastern Mediterranean (Subarea 37.3)","Sardegna","Stagno di San Giovanni",NA,"A","Y","2014","Kg",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+"PAIT13","Italy","Eastern Mediterranean (Subarea 37.3)","Sardegna","Prestagno di San Teodoro",NA,"A","Y","2014","Kg","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes",22409,NA,12
+"PAIT14","Italy","Eastern Mediterranean (Subarea 37.3)","Sardegna","Stagno Cirdu",NA,"A","Y","2014","Kg",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+"PAIT21","Italy","Adriatic (Division 37.2.1)","Veneto","(farm)","IT005VE079","A","Y","2014","Kg","no","no","no","yes","yes","yes","yes","yes","yes","yes","yes","no",400,NA,8
+"PAIT25","Italy","Adriatic (Division 37.2.1)","Veneto","(farm)","19L009","B","Y","2014","Kg","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes","yes",1000,NA,12
+"PAIT34","Italy","Adriatic (Division 37.2.1)","Veneto","(natural bed)","10M003","A","Y","2014","Kg",NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
