@@ -1,1006 +1,1133 @@
 #http://walkerke.github.io/2014/03/tfr-in-europe/
 #install.packages("base64enc")
 #devtools::install_github('rCharts', 'ramnathv', ref='dev')
+# library(sampelator)
+
+scriptdir = '../../../R'
+list.files(scriptdir)
+source(file.path(scriptdir, 'collectingSamples.R'))
+source(file.path(scriptdir, 'ribessFunctions.R'))
+source(file.path(scriptdir, 'runRibess.R'))
+source(file.path(scriptdir, 'runSampelator.R'))
+source(file.path(scriptdir, 'sampelatorFunctions.R'))
+
 library(rCharts) #for interactive plots
 options(RCHART_WIDTH = 800)
 
-#library(shinyIncubator) #for matrixInput
-library(sampelator)
-library(shinysky) #for hotable
-library(ggplot2)
+library(shinyIncubator)  #for matrixInput
+
+library(shinysky)  #for hotable
+
+# `%then%` <- shiny:::`%OR%`
+
+quantileStart <- data.frame(matrix(c(0.25, 0.75, "", ""), nrow = 2, ncol = 2))
 
 
-`%then%` <- shiny:::`%OR%`
-
-Sys.setlocale("LC_CTYPE", "C")
 
 
 
-serverEstimatingGeneralParameters <- function(input, output, session){
-  
-  ## To debug
-  output$print2 <- renderPrint({
-        
-        results$plotDesignStatistics()
-        
-      })
+
+serverFunction <- function(input,output,session){
   
   
-  output$designParameters <- renderUI({
-        
-        switch(input$samplingDesign,
-            
-            "getSimpleRandom" = {
-              
-              numericInput( inputId = "sampleVariance", 
-                  label = "Sample variance", value = NA)
-              
-            },
-            
-            "getClustered" = {
-              
-              
-              list(
-                  numericInput( inputId = "clusterSize", 
-                      label = "(Average) number sampled in each cluster", value = NA),
-                  
-                  selectInput( inputId = "optionVariance", label = "",
-                      choices = c("Sample variance" = "sampleVariance",
-                          "Variability of cluster means from the overall mean" = "clusterVariance")),
-                  
-                  conditionalPanel("input.optionVariance == 'clusterVariance'",
-                      
-#                      tabsetPanel(
-#                          tabPanel("Option 1",
-                      list(
-                          numericInput( inputId = "clusterVariance", 
-                              label = "Variability of cluster means from the overall mean", value = NA),
-                          uiOutput("formulaClusterVariance")
-                      )
-#                          ), tabPanel("Option 2",
-#                              list(
-#                                  numericInput("conditionalPrevalence", "Conditional prevalence of the outcome", NA),
-#                                  numericInput( inputId = "clusterVariance",
-#                                      label = "Variance between cluster means on log-odds scale", value = NA)    
-#                              )
-#                          )
-#                      )
-                  ),
-                  
-                  conditionalPanel("input.optionVariance == 'sampleVariance'",
-                      
-                      list(
-                          
-                          numericInput( inputId = "sampleVarianceClustered", 
-                              label = "Sample variance", value = NA),
-                          
-                          tabsetPanel( id = "clusterPanel",
-                              
-                              tabPanel("Option 1",
-                                  numericInput( inputId = "designEffect", 
-                                      label = "Design effect", value = NA)
-                              ),
-                              
-                              tabPanel("Option 2",
-                                  numericInput("correlation", "Within-cluster correlation", NA)
-                              
-                              )
-                          )
-                      )
-                  )                 
-              )
-              
-            },
-            
-            "getStratified" = {
-              
-              list(
-                  selectInput( inputId = "allocation",
-                      label = "Allocation of sample size over strata", 
-                      choices = c("Proportional to population stratum size" = "proportional",
-                          "Proportional to stratum variance (Neyman allocation)" = "neyman")),
-                  
-                  tabsetPanel( id = "loadedStratified",
-                      
-                      tabPanel("Enter data",
-                          
-                          sliderInput("nStrata", "Number of strata", min = 2, max = 40, value = 2),
-                          
-                          p(strong("Stratum proportion:"), "expected population proportion in each stratum"),
-                          p(strong("Stratum variance:"), "variance within each stratum"),
-                          
-                          hotable("stratifiedInfo"),
-                          tags$br(),
-                          shiny::actionButton("fillMatrix", "Fill matrix")
-                      
-                      ),
-                      
-                      tabPanel("Load data",
-                          
-                          fileInput('dataStratified', 'Load data',
-                              accept=c('text/csv', 
-                                  'text/comma-separated-values,text/plain', 
-                                  '.csv')),
-                          
-                          radioButtons('sepStratified', 'Separator for loaded data',
-                              c("Comma (.csv file)"=',',
-                                  "Semicolon (.csv file)"=';',
-                                  "Tab (.txt file)"='\t'),
-                              ','),
-                          
-                          checkboxInput("booleanStratumName", "First column with stratum names", value  = TRUE),
-                          
-                          tags$hr(),
-                          
-                          p(strong("Stratum proportion:"), "expected population proportion in each stratum"),
-                          p(strong("Stratum variance:"), "variance within each stratum"),
-                          
-                          tableOutput("dataStratified")
-                      
-                      )
-                  
-                  )
-              
-              )
-              
-            },
-            
-            "getTwoStage" = {
-              list(
-                  
-                  numericInput( inputId = "clusterSize", 
-                      label = "(Average) number sampled in each cluster", value = NA),
-                  
-                  selectInput("twoStagePanel", label = "", 
-                      choices = list("Stratum proportion and Cluster variance" = "option13",
-                          "Stratum proportion and Stratum variance" = "option12")),
-                  
-                  conditionalPanel("input.twoStagePanel == 'option13'",
-                      
-                      list(
-                          p(strong("Stratum proportion:"), "expected population proportion in each stratum"),
-                          p(strong("Cluster variance:"), "variance between cluster means within each stratum")
-                      )
-                  ),
-                  
-                  conditionalPanel("input.twoStagePanel == 'option12'",
-                      
-                      list(
-                          p(strong("Stratum proportion:"), "expected population proportion in each stratum"),
-                          p(strong("Stratum variance:"), "variance within each stratum"),
-                          
-                          numericInput( inputId = "designEffectMS", 
-                              label = "Design effect", value = NA)
-                      
-                      )
-                  ),
-                  
-                  tabsetPanel( id = "loadedTwoStage",
-                      
-                      tabPanel("Enter data",
-                          
-                          sliderInput("nStrata2", "Number of strata", min = 2, max = 40, value = 2),
-                          
-                          conditionalPanel("input.twoStagePanel == 'option13'",
-                              
-                              list(
-                                  hotable("twoStage13Info"),
-                                  tags$br(),
-                                  shiny::actionButton("fillMatrix2", "Fill matrix")
-                              )
-                          ),
-                          
-                          conditionalPanel("input.twoStagePanel == 'option12'",
-                              
-                              list(
-                                  
-                                  hotable("twoStage12Info"),
-                                  tags$br(),
-                                  shiny::actionButton("fillMatrix3", "Fill matrix")
-                              
-                              )
-                          )
-                      
-                      ),
-                      
-                      tabPanel("Load data",
-                          
-                          fileInput('dataTwoStage', 'Load data',
-                              accept=c('text/csv', 
-                                  'text/comma-separated-values,text/plain', 
-                                  '.csv')),
-                          
-                          radioButtons('sepTwoStage', 'Separator for loaded data',
-                              c("Comma (.csv file)"=',',
-                                  "Semicolon (.csv file)"=';',
-                                  "Tab (.txt file)"='\t'),
-                              ','),
-                          
-                          checkboxInput("booleanStratumName2", "First column with stratum names", value  = TRUE),
-                          
-                          tags$hr(),
-                          
-                          tableOutput("dataTwoStage")
-                      
-                      )
-                  
-                  )
-              
-              )
-              
-            },
-            
-            "getThreeStage" = {
-              
-              list(
-                  
-                  list(
-                      
-                      fluidRow(
-                          column(6, numericInput(inputId = "sizeLevel3", "Number of level III items sampled", value = NA)),
-                          column(6, numericInput(inputId = "varianceLevel3", "Variance between units of level III", value = NA))
-                      ),
-                      fluidRow(
-                          column(6, numericInput(inputId = "sizeLevel2", "(Average) number sampled at level II", value = NA)),
-                          column(6, numericInput(inputId = "varianceLevel2", "Variance between units of level II", value = NA))
-                      ),
-                      
-                      numericInput(inputId = "sizeLevel1", "(Average) number sampled at level I", value = NA,
-                          width = "48%")
-                  
-                  ),
-                  
-                  uiOutput("threeStagePanel"),
-                  shiny::actionButton("update", "Update 'General parameters'")
-              
-              )
-              
-            },
-            
-            "getChangeOverTime" = {
-              
-              list(
-#                  sliderInput( inputId = "dimension", 
-#                      label = "Number of time points", value = 2,
-#                      min = 2, max = 10),
-#                  
-                  p(strong("Diagonal values:"), "variance at a given time point"),
-                  p(strong("Non-diagonal values:"), "correlation between two time points"),
-                  
-                  hotable("correlationInfo"),
-                  tags$br(),
-                  shiny::actionButton(inputId = "fillMatrixCorrelation", label = "Fill matrix")
-              
-              )
-              
-            }
-        )
-        
-      })
-  
-  
-  output$formulaClusterVariance <- renderUI({
-        
-        withMathJax(helpText("Given by $$ s^2_c = \\sum_{t=1}^a \\frac{(\\bar{y_t}-\\bar{y})^2}{a-1},$$
-                    where \\(a\\) is the number of clusters, \\(\\bar{y_t}\\) is the mean for cluster \\(t\\) and \\(\\bar{y}\\) is the overall mean."))
-        
-      })
-  
-  
-  observeEvent(input$update, {
-        
-        if(!all(is.null(c(input$marginalPrevalence0, input$conditionalPrevalence0)))) {
-          
-          desiredResult <- getDesiredDifference(varianceLevel3 = input$varianceLevel3,
-              varianceLevel2 = input$varianceLevel2,
-              marginalPrevalence0 = input$marginalPrevalence0,
-              marginalPrevalenceA = input$marginalPrevalenceA,
-              conditionalPrevalence0 = input$conditionalPrevalence0,
-              conditionalPrevalenceA = input$conditionalPrevalenceA)
-          
-          if(!is.na(desiredResult$desiredDifference)){
-            
-            observe(
-                updateNumericInput(session, "desiredDifference", 
-                    value = round(desiredResult$desiredDifference, 3))
-            )     
-          }
-          
-        }
-        
-        if(!is.null(input$sizeLevel1)){
-          
-          allSizes <- c(input$sizeLevel1, input$sizeLevel2, input$sizeLevel3)
-          missingSize <- sapply(as.list(allSizes), is.na)
-          
-          if(is.na(input$sampleSize) & all(!missingSize)) {
-            
-            observe(
-                updateNumericInput(session, "sampleSize", value = prod(allSizes))
-            )
-            
-          }
-          
-        }
+  ## for debugging
+  output$print <- renderPrint({
         
         
       })
   
-  
-  output$threeStagePanel <- renderUI({
+  output$titlePanel <- renderUI({
         
-        if( (input$range != 'sampleSize' && is.na(input$sampleSize)) ||
-            (input$range == 'sampleSize' && is.na(input$minsampleSize) && is.na(input$maxsampleSize)) ){
-          
-          tabsetPanel(
+        
+        titlePanel(title = div(img(src = "/inst/images/EFSA_logo.jpg",
+                    float = "top", height = "60px", hspace = "50px"),
+                "RiBESS+"), windowTitle = "RiBESS+")
+        
+      })
+  
+  
+  ## Random input
+  createParametersTable <- function(parameterName, distributionName){
+    
+    output[[paste0("parametersTable", parameterName)]] <-  
+        renderUI({ 
               
-              tabPanel("Marginal level",
-                  
-                  list(
-                      
-                      p(em("i.e. population level")),
-                      
-                      numericInput(inputId = "marginalPrevalence0", "Marginal prevalence under the null hypothesis", value = NA),
-                      numericInput(inputId = "marginalPrevalenceA", "Marginal prevalence under the alternative hypothesis", value = NA)
-                  
-                  )
+              if (is.null(distributionName)) return()
               
-              ),
-              
-              tabPanel("Conditional level",
+              switch(distributionName,
                   
-                  list(
-                      
-                      numericInput(inputId = "conditionalPrevalence0", "Conditional prevalence under the null hypothesis", value = NA),
-                      numericInput(inputId = "conditionalPrevalenceA", "Conditional prevalence under the alternative hypothesis", value = NA)
+                  "unif" = {
+                    list(
+                        numericInput(paste0("min", parameterName), "Minimum", 0),
+                        numericInput(paste0("max", parameterName), "Maximum", 1)
+                    )
+                  },
                   
-                  )
+                  "norm" = {
+                    list(
+                        numericInput(paste0("mean", parameterName), "Mean", 0),
+                        numericInput(paste0("sd", parameterName), "Standard Deviation", 1)
+                    )
+                  }, 
+                  
+                  "beta" = {
+                    list(
+                        numericInput(paste0("shape1", parameterName), "Shape 1", NA),
+                        numericInput(paste0("shape2", parameterName), "Shape 2", NA)
+                    )
+                  },
+                  
+                  "gamma" = {
+                    list(
+                        numericInput(paste0("shape", parameterName), "Shape", NA),
+                        numericInput(paste0("rate", parameterName), "Rate", 1)
+                    )
+                    
+                  },
+                  
+                  "reference" = {
+                    
+                  },
+                  
+                  "expNorm" = {
+                    list(
+                        numericInput(paste0("mean", parameterName), "Mean", 0),
+                        numericInput(paste0("sd", parameterName), "Standard Deviation", 1),
+                        p(em("Values will be shown on exponential scale"))
+                    )
+                  }, 
+                  
+                  "expitNorm" = {
+                    list(
+                        numericInput(paste0("mean", parameterName), "Mean", 0),
+                        numericInput(paste0("sd", parameterName), "Standard Deviation", 1),
+                        p(em("Values will be shown on expit scale"))
+                    )
+                  } 
               )
+              
+            })
+    
+  }
+  
+  getDistributionParameters <- function(parameterName, distributionName){
+    
+    results[[paste0("distributionParameters", parameterName)]] <- reactive({
+          
+          switch(distributionName,
+              
+              "unif" = {
+                c(min = input[[ paste0("min", parameterName) ]],
+                    max = input[[ paste0("max", parameterName) ]])
+              },
+              
+              "norm" = {
+                c(mean = input[[ paste0("mean", parameterName) ]],
+                    sd = input[[ paste0("sd", parameterName) ]])
+              }, 
+              
+              "beta" = {
+                c(shape1 = input[[ paste0("shape1", parameterName) ]],
+                    shape2 = input[[ paste0("shape2", parameterName) ]])
+              },
+              
+              "gamma" = {
+                c(shape = input[[ paste0("shape", parameterName) ]],
+                    rate = input[[ paste0("rate", parameterName) ]])
+              },
+              
+              "reference" = {
+                c(value = NA)
+              },
+              
+              "expNorm" = {
+                c(mean = input[[ paste0("mean", parameterName) ]],
+                    sd = input[[ paste0("sd", parameterName) ]])
+              },
+              
+              "expitNorm" = {
+                c(mean = input[[ paste0("mean", parameterName) ]],
+                    sd = input[[ paste0("sd", parameterName) ]])
+              },
           )
           
-          
-        } else {
-          
-          numericInput(inputId = "varianceLevel1", "Variance between units of level I", value = NA,
-              width = "48%")
-          
-        }
-        
-        
-      })
-  
-  
-  results <- reactiveValues(correlationUpdated = data.frame(matrix("", nrow = 2, 
-              ncol = 2), stringsAsFactors = FALSE))
-  
-  
-  results$dataStratified <- reactive({
-        
-        inFile <- input$dataStratified
-        
-        if (is.null(inFile))
-          return(NULL)
-        
-        dataStratified <- read.table(inFile$datapath, header = TRUE, 
-            sep = input$sepStratified, quote = '"')
-        
-        if(!input$booleanStratumName){
-          
-          dataStratified <- cbind(letters[1:nrow(dataStratified)], dataStratified)
-          
-        }
-        
-        colnames(dataStratified) <- c("Stratum name", "Stratum proportion", "Stratum variance")
-        
-        dataStratified
-        
-      })
-  
-  
-  output$dataStratified <- renderTable({
-        
-        validate(need(results$dataStratified(), "No data loaded"))
-        results$dataStratified()
-        
-      }, include.rownames=FALSE)
-  
-  
-  results$dataTwoStage <- reactive({
-        
-        inFile <- input$dataTwoStage
-        
-        if (is.null(inFile))
-          return(NULL)
-        
-        dataTwoStage <- read.table(inFile$datapath, header = TRUE, 
-            sep = input$sepTwoStage, quote = '"')
-        
-        if(!input$booleanStratumName2){
-          
-          dataTwoStage <- cbind(letters[1:nrow(dataTwoStage)], dataTwoStage)
-          
-        }
-        
-        if(input$twoStagePanel == 'option13'){
-          
-          colnames(dataTwoStage) <- c("Stratum name", "Stratum proportion", "Cluster variance")
-          
-        } else {
-          
-          colnames(dataTwoStage) <- c("Stratum name", "Stratum proportion", "Stratum variance")
-          
-        }
-        
-        dataTwoStage
-        
-      })
-  
-  
-  output$dataTwoStage <- renderTable({
-        
-        validate(need(results$dataTwoStage(), "No data loaded"))
-        results$dataTwoStage()
-        
-      }, include.rownames=FALSE)
-  
-  
-  
-# Matrices and their updates
-  
-  makeHotable <- function(name, nStrata){
+        })
     
-    if(!is.null(nStrata)){
-      
-      initDataFrame <- data.frame(stratumName = letters[1:nStrata],
-          stratumProportion = rep("", nStrata), 
-          variance = rep("", nStrata), stringsAsFactors = FALSE)
-      initDataFrame[,-1] <- as.data.frame(sapply(initDataFrame[,-1], as.numeric))
-      
-      colnames(initDataFrame) <- switch(name,
-          "stratified" = c("Stratum name", "Stratum proportion", "Stratum variance"),
-          "twoStage13" = c("Stratum name", "Stratum proportion", "Cluster variance"),
-          "twoStage12" = c("Stratum name", "Stratum proportion", "Stratum variance")) 
-      
-      if(!is.null(input[[paste0(name, "Info")]])){
-        
-        if(nStrata >= nrow(hot.to.df(input[[paste0(name, "Info")]]))){
+  }  
+  
+  
+  createRandomValues <- function(parameterName, baseName, seed){
+    
+    results[[ paste0("randomValues", parameterName) ]] <- reactive({
           
-          initDataFrame[1:nrow(hot.to.df(input[[paste0(name, "Info")]])),] <- 
-              hot.to.df(input[[paste0(name, "Info")]])
+          validate(need(results$nMC(), 
+                  "Please provide valid input value for 'Number of random values'"))
+          
+          if(input[[paste0("random", baseName)]] == "fixed") {
+            
+            input[[ parameterName ]]
+            
+          } else {
+            
+            if(input[[paste0("random", baseName)]] == "randomKnownQ"){
+              
+              bestResult <- results[[ paste0("q", parameterName, "Info") ]]()
+              
+              distributionName = bestResult$bestName
+              distributionParameters = bestResult$bestParameters
+              linkFunction <- function(x) x
+              
+            } else {
+              
+              if(input[[paste0("distribution", parameterName)]] == "reference") {
+                
+                if(baseName == "Rr"){
+                  
+                  return(1)
+                  
+                } else {
+                  
+                  return(NA)
+                  
+                }
+                
+              } else {
+                
+                if(input[[paste0("distribution", parameterName)]] == "expNorm") {
+                  
+                  distributionName <- "norm"
+                  linkFunction <- function(x) exp(x)
+                  
+                } else if(input[[paste0("distribution", parameterName)]] == "expitNorm") {
+                  
+                  distributionName <- "norm"
+                  linkFunction <- function(x) {exp(x)/(1 + exp(x))}
+                  
+                } else {
+                  
+                  distributionName <- input[[paste0("distribution", parameterName)]]
+                  linkFunction <- function(x) x
+                  
+                }
+                
+                distributionParameters <- getDistributionParameters(parameterName = parameterName,
+                    distributionName = distributionName)()
+                if(!is.null(distributionParameters)){
+                  validate(need(!any(sapply(distributionParameters, is.na)), 
+                          "Please enter distribution parameters"))
+                  
+                }
+              }
+            }
+            
+            randomValues <- tryCatch({
+                  
+                  linkFunction(createRandom( distributionName = distributionName, 
+                          distributionParameters = distributionParameters,
+                          nMC = results$nMC(), seed = seed)) 
+                  
+                }, error = function(err) {
+                  
+                  return(err)
+                  
+                })
+            
+            return(randomValues)
+            
+            
+          }
+          
+        })
+  }
+  
+  results <- reactiveValues()
+  
+  results$submitSample <- reactive({
+        
+        if(input$toCalculate != 'pFree'){
+          
+          input$submit
           
         } else {
           
-          initDataFrame <- hot.to.df(input[[paste0(name, "Info")]])[1:nStrata,]
+          NULL
           
         }
+      })
+  
+  results$submitPfree <- reactive({
+        
+        if(input$toCalculate == 'pFree'){
+          
+          input$submit
+          
+        } else {
+          
+          NULL
+          
+        }
+      })
+  
+  results$pIntroNames <- reactive({
+        
+        paste0(rep("Pintro", input$nPeriods), 1:input$nPeriods)
+        
+      })
+  
+  
+  results$parameterNames <- reactive({
+        
+        if(!input$numRF > 0){
+          
+          c("N", "TSe", "Pfree0", results$pIntroNames())
+          
+        } else {
+          
+          baseNames <- paste0(rep("Rr", input$numRF), 1:input$numRF)
+          
+          relativeRiskNames <- sapply(as.list(1:input$numRF), 
+              function(x){
+                if(!is.null(input[[paste0('numLevels',x)]])){
+                  
+                  times <- input[[paste0('numLevels',x)]]
+                  return(paste0(rep(baseNames[x], times), '_', 1:times))
+                  
+                }
+              } 
+          )
+          
+          baseNames <- paste0(rep("Proportion", input$numRF), 1:input$numRF)
+          
+          proportionNames <- sapply(as.list(1:input$numRF), 
+              function(x){
+                if(!is.null(input[[paste0('numLevels',x)]])){
+                  
+                  times <- input[[paste0('numLevels',x)]]
+                  return(paste0(rep(baseNames[x], times), '_', 1:times))
+                  
+                }
+              }
+          )
+          
+          unlist(c("N", "TSe", "Pfree0", results$pIntroNames(),
+                  relativeRiskNames, proportionNames))
+          
+        }      
+        
+      })
+  
+  
+  results$baseNames <- reactive({
+        
+        baseNames <- c()
+        
+        for(i in seq_along(results$parameterNames()) ){
+          
+          baseNames[i] <- local({
+                
+                iParameter <- results$parameterNames()[i]
+                if(iParameter %in% c("N", "TSe", "Pfree0", results$pIntroNames())){
+                  iParameter
+                } else {
+                  substr(iParameter, start = 1, stop = (nchar(iParameter) - 3))
+                }
+                
+              })
+          
+        }
+        
+        baseNames
+        
+      })
+  
+  
+  results$isRandom <- reactive({
+        
+        if(input$toCalculate != 'pFree'){
+          
+          baseNames <- results$baseNames()[ -which(results$baseNames() %in% c("Pfree0", results$pIntroNames())) ]
+          isRandom <- unlist(sapply(paste0('random', baseNames), function(x) input[[x]] != 'fixed'))
+          
+        } else {
+          
+          isRandom <- unlist(sapply(paste0('random', c("Pfree0", results$pIntroNames())), function(x) input[[x]] != 'fixed'))
+          
+        }
+        
+        any(isRandom)
+        
+      })
+  
+  
+  observeEvent( results$isRandom(), {
+        
+        output$isRandom <- renderUI({ 
+              
+              if(results$isRandom()){
+                
+                list(
+                    numericInput("nMC", "Number of random values", value = 100, width = "50%"),
+                    
+                    conditionalPanel("input.nMC > 1000",
+                        p(em("Warning: A large 'number of random values' will seriously slow down calculations"))
+                    )
+                )
+                
+              } else {
+                
+                NULL
+                
+              }
+              
+            })
+        
+        observe( updateNumericInput( session, "nMC", value = input$nMC ) )
+        
+      })
+  
+  
+  
+  observe({
+        
+        for(i in seq_along(results$parameterNames()) ){
+          
+          local({
+                
+                i <- i
+                iParameter <- results$parameterNames()[i]
+                iBaseName <- results$baseNames()[i]
+                
+                #Create random values
+                createRandomValues(parameterName = iParameter, 
+                    baseName = iBaseName, seed = i)
+                
+                #Create parameter tables for random input
+                observeEvent( input[[paste0("distribution", iParameter)]], {
+                      
+                      createParametersTable( parameterName = iParameter, 
+                          distributionName = input[[paste0("distribution", iParameter)]] )
+                      
+                    })
+                
+                #Plot the random values that will be generated
+                output[[ paste0("plot", iParameter) ]] <- renderPlot({
+                      
+                      if(input[[ paste0("random", iBaseName) ]] != "fixed"){
+                        
+                        if(input[[paste0("distribution", iParameter)]] == "reference"){
+                          
+                          if(iBaseName == "Proportion") {
+                            
+                            message <- "Please push 'Complete risk proportions' for a plot to be shown"
+                            
+                          } else {
+                            
+                            message <- "No plot shown"
+                            
+                          }
+                          
+                        } else {
+                          
+                          message <- "Please enter valid distribution quantiles or parameters. \n Make sure that quantiles are ordered from small to large."
+                          
+                        }
+                        
+                        validate(need( !any(is.na(results[[ paste0("randomValues", iParameter) ]]())) &
+                                    length(results[[ paste0("randomValues", iParameter) ]]()) > 2, 
+                                message))
+                        par(mar=c(4.1,4.1,1.1,1.1))
+                        plot(density(results[[ paste0("randomValues", iParameter) ]]() ),
+                            main = "", las = 1)
+                        
+                      }
+                      
+                    })
+                
+                #Info on distribution for quantiles
+                results[[ paste0("q", iParameter, "Info") ]] <- reactive({
+                      
+                      if(input[[paste0("random", iBaseName)]] == "randomKnownQ") {
+                        
+                        quantileMatrix <- input[[paste0("q", iParameter)]]
+                        validate(need(!any(is.na(quantileMatrix)), "Please enter distribution quantiles.") | # %then%
+                                need(quantileMatrix[,1] == sort(quantileMatrix[,1]), "Please sort probabilities from small to large.") | # %then%
+                                need(quantileMatrix[,2] == sort(quantileMatrix[,2]), "Please sort quantiles from small to large."))
+                        
+                        return( getBestDistribution(probabilities = quantileMatrix[,1], 
+                                quantiles =  quantileMatrix[,2]) )
+                        
+                      } else {
+                        
+                        return( NULL )
+                        
+                      }
+                      
+                    })
+                
+                output[[ paste0("q", iParameter, "Info") ]] <- renderUI({
+                      
+                      if(input[[paste0("random", iBaseName)]] == "randomKnownQ") {
+                        
+                        bestResult <- results[[ paste0("q", iParameter, "Info") ]]()
+                        
+                        list(
+                            strong("Distribution with largest log-likelihood"),
+                            tags$br(),
+                            HTML(paste('<b> out of', paste(names(bestResult$allNames), collapse = ", "), '</b>')),
+                            HTML(paste('<br/>', "Distribution:", names(bestResult$bestName), 
+                                    '<br/>', "Parameters:", 
+                                    paste(paste0(signif(bestResult$bestParameters, 5), " (", names(bestResult$bestParameters), ")"), collapse = ", "),
+                                    '<br/>', "Log-likelihood:", signif(bestResult$logLikelihood, 5)))
+                        )
+                        
+                      } else {
+                        
+                        NULL
+                        
+                      }
+                      
+                    })
+                
+              })
+        }
+        
+      })
+  
+  
+  
+  #Make risk factor tables 
+  #toExpand: 'Rr' or 'Proportion' or 'names'
+  makeRiskList <- function(toExpand){
+    
+    if(input$numRF == 0) return()
+    
+    riskList <- list()
+    
+    for(iFactor in 1:input$numRF){
+      
+      if(is.null(input[[paste0('numLevels',iFactor)]])) return()
+      
+      rfName <- input[[paste0('rf',iFactor)]]
+      rfName[which(rfName == "")] <- paste("risk factor", iFactor)
+      
+      levelNames <- c()
+      
+      if(toExpand == 'names'){
+        
+        rfValues <- c()
+        
+      } else if(input[[paste0('random', toExpand)]] == "fixed"){
+        
+        rfValues <- matrix(NA, nrow = 1, ncol = input[[paste0('numLevels',iFactor)]])
+        
+      } else {
+        
+        rfValues <- matrix(NA, nrow = results$nMC(), ncol = input[[paste0('numLevels',iFactor)]])
+        attr(rfValues, "random") <- TRUE
+        
       }
       
-      results[[paste0(name,"Updated")]] <- initDataFrame
+      for(jLevel in 1:input[[paste0('numLevels',iFactor)]]) {
+        
+        if(toExpand == 'names'){
+          
+          rfValues[jLevel] <- 1
+          
+        } else if(input[[paste0('random', toExpand)]] == "fixed"){
+          
+          if(!is.null(input[[paste0(toExpand,iFactor,'_',jLevel)]])){
+            
+            rfValues[jLevel] <- input[[paste0(toExpand,iFactor,'_',jLevel)]]
+            
+          }
+          
+        } else {
+          
+          rfValues[,jLevel] <- results[[paste0("randomValues", toExpand, iFactor,'_',jLevel)]]()
+          
+        }   
+        
+        if(!is.null(input[[paste0('level',iFactor,'_',jLevel)]])){
+          
+          levelNames[jLevel] <- input[[paste0('level',iFactor,'_',jLevel)]]
+          
+        }
+        
+      }
+      
+      if(!all(levelNames == "")){
+        
+#        if(toExpand == 'names'){
+        
+        names(rfValues) <- levelNames
+        
+#        } else {
+#          
+#          colnames(rfValues) <- levelNames
+#          
+#        }
+      }
+      
+      riskList[[rfName]] <- rfValues
       
     }
     
+    return(riskList)
+    
+  }
+  
+  
+  results$columnsRF <- reactive({
+        
+        inputList <- makeRiskList(toExpand = 'names')
+        
+        if(is.null(inputList)){
+          
+          riskGroupsNames <- data.frame("All") 
+          names(riskGroupsNames) <- "Group"
+          
+        } else {
+          
+          riskGroupsNames <- as.data.frame(helpExpandNames(inputList = inputList, toPaste = FALSE))
+          
+          if(input$numRF == 1){
+            
+            names(riskGroupsNames) <- input$rf1
+            
+          }
+          
+        }
+        
+        return( riskGroupsNames )
+        
+      })
+  
+  
+  
+  #Update input proportions
+  observeEvent(input$completeRisks, {
+        
+        if(input$asDataFrame == "none"){
+          
+          for (i in 1:input$numRF) {
+            
+            local({
+                  
+                  i <- i
+                  
+                  if(input$randomProportion == "fixed"){
+                    
+                    currentSum <- 0
+                    riskIds <- c()
+                    
+                    for(j in 1:input[[paste0('numLevels',i)]]) {
+                      
+                      if(input[[paste0('Proportion',i,'_',j)]] == 0 |
+                          is.na(input[[paste0('Proportion',i,'_',j)]])) {
+                        
+                        riskIds <- c(riskIds, j)
+                        
+                      } else {
+                        
+                        currentSum <- currentSum + input[[paste0('Proportion',i,'_',j)]]
+                        
+                      }
+                      
+                    }
+                    
+                  } else {
+                    
+                    currentSum <- rep(0, results$nMC())
+                    riskIds <- c()
+                    
+                    for(j in 1:input[[paste0('numLevels',i)]]) {
+                      
+                      if(input[[paste0('distributionProportion',i,'_',j)]] == 'reference') {
+                        
+                        riskIds <- c(riskIds, j)
+                        
+                      } else {
+                        
+                        currentSum <- currentSum + results[[paste0("randomValuesProportion", i,'_',j)]]()
+                        
+                      }
+                      
+                    }
+                    
+                  }
+                  
+                  totalZero <- length(riskIds)
+                  
+                  if(totalZero > 0){
+                    
+                    for(k in 1:totalZero){
+                      
+                      if(input$randomProportion == "fixed"){
+                        
+                        updateNumericInput( session, paste0('Proportion',i,'_',riskIds[k]),
+                            value = ((1 - currentSum)/ totalZero) )
+                        
+                      } else {
+                        
+                        results[[paste0("randomValuesProportion", i,'_',riskIds[k])]] <- 
+                            reactive((1 - currentSum)/ totalZero)
+                        
+                      }
+                      
+                    }
+                  }
+                  
+                })
+          }  
+          
+        }
+        
+      })
+  
+  
+  
+  
+  observeEvent(input$numRF, {
+        
+        if(input$numRF == 0)
+          return( NULL )
+        
+        
+        for (i in 1:input$numRF) {
+          
+          output[[paste0('levelTable',i)]] <- local({
+                
+                i <- i
+                
+                renderUI({
+                      
+                      tags <- list()
+                      
+                      for(j in 1:input[[paste0('numLevels',i)]]) {
+                        
+                        local({   
+                              j <- j
+                              observe({
+                                    updateTextInput(session, paste0('level',i,'_',j), value = input[[paste0('level',i,'_',j)]])
+                                    updateNumericInput( session, paste0('Rr',i,'_',j), value = input[[paste0('Rr',i,'_',j)]] )                                    
+                                  })
+                            })
+                        
+                        levelNames <- column(2,textInput(paste0('level',i,'_',j),'Level name',letters[j]),offset=2)
+                        levelValues <- NULL
+                        
+                        if(input$asDataFrame == 'none'){
+                          
+                          
+                          levelValues <- list(
+                              
+                              column(2,
+                                  
+                                  conditionalPanel("input.randomRr == 'fixed'",
+                                      numericInput(paste0('Rr',i,'_',j),'Value', value = 1, min = 1)
+                                  ),
+                                  
+                                  conditionalPanel("input.randomRr == 'randomKnownPar'",
+                                      list(
+                                          selectInput(paste0("distributionRr", i,'_',j), label = "Distribution",
+                                              choices = c("reference", "normal" = "expNorm")), 
+                                          uiOutput(paste0('parametersTableRr', i,'_',j))
+                                      )
+                                  )
+                              
+                              ),
+                              
+                              column(2, conditionalPanel( paste0("input.randomRr != 'fixed' &
+                                              input.distributionRr", i, '_', j, " != 'constant'"),
+                                      plotOutput(paste0("plotRr", i, '_',j), height = "250px")
+                                  )),
+                              
+                              column(2,
+                                  
+                                  conditionalPanel("input.randomProportion == 'fixed'",
+                                      numericInput(paste0('Proportion',i,'_',j),'Value', value = NA)
+                                  ),
+                                  
+                                  conditionalPanel("input.randomProportion == 'randomKnownPar'",
+                                      list(
+                                          selectInput(paste0("distributionProportion", i,'_',j), label = "Distribution",
+                                              choices = c("reference", "normal" = "expitNorm")),
+                                          uiOutput(paste0('parametersTableProportion', i,'_',j))
+                                      )
+                                  )
+                              
+                              ),
+                              
+                              column(2, conditionalPanel( paste0("input.randomProportion != 'fixed' &
+                                              input.distributionProportion", i, '_', j, " != 'constant'"),
+                                      plotOutput(paste0("plotProportion", i, '_',j), height = "250px")
+                                  ))
+                          )
+                          
+                        } else if (input$asDataFrame == "one"){
+                          
+                          levelValues <- list(
+                              
+                              column(2,
+                                  
+                                  conditionalPanel("input.randomRr == 'fixed'",
+                                      numericInput(paste0('Rr',i,'_',j),'Value', value = 1, min = 1)
+                                  ),
+                                  
+                                  conditionalPanel("input.randomRr == 'randomKnownPar'",
+                                      list(
+                                          selectInput(paste0("distributionRr", i,'_',j), label = "Distribution",
+                                              choices = c("reference", "normal" = "expNorm")),
+                                          uiOutput(paste0('parametersTableRr', i,'_',j))
+                                      )
+                                  )
+                              
+                              ),
+                              
+                              column(2, conditionalPanel( paste0("input.randomRr != 'fixed' &
+                                              input.distributionRr", i, '_', j, " != 'constant'"),
+                                      plotOutput(paste0("plotRr", i, '_',j), height = "250px")
+                                  ))
+                          )
+                          
+                        }
+                        
+                        tags[[j]] <- fluidRow(list(levelNames, levelValues))
+                        
+                        
+                      }
+                      
+                      tagList(tags) 
+                      
+                    })
+                
+              })
+        }
+      })
+  
+  
+  
+  output$rfTable <- renderUI({
+        
+        if(input$numRF == 0)
+          return( NULL )
+        
+        tags <- list()
+        for (i in 1:input$numRF) {
+          tags[[i*2-1]] <- fluidRow(column(2,textInput(paste0('rf',i),'Risk Factor',
+                      paste('risk factor', i))),
+              column(2, sliderInput(paste0('numLevels',i),'# levels', min = 2, max = 10, value = 2, step = 1)))
+          tags[[i*2]] <- uiOutput(paste0('levelTable',i))
+          
+        }
+        tagList(tags)
+        
+      })
+  
+  
+  
+  # Construct reactive matrices
+  makeHotable <- function(name){
+    
+    nGroups <- nrow(results$columnsRF())
+    
+    if(name == "rfDataFrame"){
+      
+      if(input$asDataFrame == "none" | any(results$columnsRF() == "All")){
+        
+        results[[paste0(name,"Updated")]] <- NULL
+        return( results[[paste0(name,"Updated")]] )
+        
+      } else if(input$asDataFrame == "one"){
+        
+        initDataFrame <- data.frame(proportionsRiskGroups = rep("", nGroups), 
+            stringsAsFactors = FALSE)
+        inputNames <- "Proportion"
+        
+      } else {
+        
+        initDataFrame <- data.frame(relativeRisks = rep(1, nGroups), 
+            proportionsRiskGroups = rep("", nGroups), stringsAsFactors = FALSE)
+        inputNames <- c("Relative risk", "Proportion")
+        
+      }
+      
+      
+    } else if (name == "convenience") {
+      
+      initDataFrame <- data.frame(convenience = rep(1, nGroups))
+      inputNames <- "Convenience"
+      
+    } else if (name == "gse") {
+      
+      initDataFrame <- data.frame(sampleSize = rep(1, nGroups))
+      inputNames <- "Sample Size"
+      
+    }
+    
+    names(initDataFrame) <- inputNames
+    
+    if(name == "rfDataFrame"){
+      
+      if(!is.null(input[[name]])){
+        
+        if(all(inputNames %in% names(hot.to.df(input[[name]])))){
+          
+          if(nGroups >= nrow(hot.to.df(input[[name]]))){
+            
+            initDataFrame[1:nrow(hot.to.df(input[[name]])),] <- 
+                hot.to.df(input[[name]])[,inputNames]
+            
+          } else {
+            
+            initDataFrame[,inputNames] <- 
+                hot.to.df(input[[name]])[1:nGroups,inputNames]
+            
+          }  
+          
+        }
+        
+      }
+      
+    }
+    
+    if(length(inputNames) > 1){
+      
+      initDataFrame[,inputNames] <- 
+          as.data.frame(sapply(initDataFrame[,inputNames], as.numeric))
+      
+    } else {
+      
+      initDataFrame[,inputNames] <- 
+          as.numeric(initDataFrame[,inputNames])
+      
+    }
+    
+    bindedDataFrame <- cbind(results$columnsRF(), initDataFrame)
+    
+    results[[paste0(name,"Updated")]] <- bindedDataFrame
     
   }
   
   
   updateData <- function(name){
     
-    initData <- results[[paste0(name,"Updated")]]
-    initData[,-1] <- as.data.frame(sapply(initData[,-1], as.numeric))
+    inputNames <- switch(input$asDataFrame,
+        "none" = { return(NULL) },
+        "two" = { c("Relative risk", "Proportion") },
+        "one" = { "Proportion" }
+    )
     
-    missingProportions <- which(is.na(initData[,2]))
-    currentSum <- sum(as.numeric(initData[,2]), na.rm = TRUE)
+    initDataFrame <- hot.to.df(input[[name]])
+#    initDataFrame <- results[[paste0(name,"Updated")]]
+    
+    if(length(inputNames) > 1){
+      
+      initDataFrame[,inputNames] <- 
+          as.data.frame(sapply(initDataFrame[,inputNames], as.numeric))
+      
+    } else {
+      
+      initDataFrame[,inputNames] <- 
+          as.numeric(initDataFrame[,inputNames])
+      
+    }
+    
+    missingProportions <- which(is.na(initDataFrame[,"Proportion"]))
+    currentSum <- sum(as.numeric(initDataFrame[,"Proportion"]), na.rm = TRUE)
     
     if(length(missingProportions) > 0) {
       
-      initData[missingProportions,2] <- 
-          round((1 - currentSum) / length(missingProportions), 3)
+      initDataFrame[missingProportions,"Proportion"] <- 
+          (1 - currentSum) / length(missingProportions)
       
     }
     
-    missingVariances <- which(is.na(initData[,3]))
-    if(length(missingVariances) > 0) {
-      
-      initData[missingVariances,3] <- 
-          as.numeric(initData[1,3])
-      
-    }
-    
-    results[[paste0(name,"Updated")]] <- initData
-  }
-  
-  
-  # stratified
-  observe({
-        
-        makeHotable(name = "stratified", nStrata = input$nStrata)
-        
-      })
-  
-  observeEvent(input$fillMatrix,{
-        
-        updateData(name = "stratified")
-        
-      })
-  
-  output$stratifiedInfo <- renderHotable({
-        
-        results$stratifiedUpdated
-        
-      }, readOnly = FALSE)
-  
-  
-  # twoStage13  
-  observe({
-        
-        makeHotable(name = "twoStage13", nStrata = input$nStrata2)
-        
-      })
-  
-  observeEvent(input$fillMatrix2,{
-        
-        updateData(name = "twoStage13")
-        
-      })
-  
-  output$twoStage13Info <- renderHotable({
-        
-        results$twoStage13Updated
-        
-      }, readOnly = FALSE)
-  
-  
-  # twoStage12  
-  observe({
-        
-        makeHotable(name = "twoStage12", nStrata = input$nStrata2)
-        
-      })
-  
-  observeEvent(input$fillMatrix3,{
-        
-        updateData(name = "twoStage12")
-        
-      })
-  
-  output$twoStage12Info <- renderHotable({
-        
-        results$twoStage12Updated
-        
-      }, readOnly = FALSE) 
-  
-  
-  
-  
-  # correlation
-  observeEvent(input$fillMatrixCorrelation, {
-        
-        currentData <- hot.to.df(input$correlationInfo)
-        
-        nDimension <- 2
-        
-        variance <- currentData[1,1]
-        correlation <- currentData[1,2]
-        
-        currentData[1:nDimension, 1:nDimension] <- correlation
-        diag(currentData) <- rep(variance, nDimension)
-        
-        results$correlationUpdated <- currentData
-        
-      })
-  
-  
-  
-  output$correlationInfo <- renderHotable({
-        
-        colnames(results$correlationUpdated) <- paste("Time point", 1:2)
-        rownames(results$correlationUpdated) <- paste("Time point", 1:2)
-        results$correlationUpdated
-        
-      }, readOnly = FALSE)
-  
-  
-  
-  results$designEffect <- reactive({
-        
-        value <- NA
-        
-        if( !is.null(input$samplingDesign)){
-          
-          if(input$samplingDesign == "getClustered" & !is.null(input$clusterPanel)){
-            
-            if(input$clusterPanel == "Option 1"){
-              
-              value <- input$designEffect
-              
-            }
-            
-          } else if(input$samplingDesign == "getTwoStage" & !is.null(input$twoStagePanel)){
-            
-            if(input$twoStagePanel == "option12"){
-              
-              value <- input$designEffectMS
-              
-            } 
-            
-          }
-          
-        }
-        
-        value
-        
-      })
-  
-  results$clusterVariance <- reactive({
-        
-        if( !is.null(input$samplingDesign)){
-          
-          if(input$samplingDesign == "getClustered"){
-            if(input$optionVariance == "clusterVariance"){
-              
-              input$clusterVariance
-              
-            } else {
-              
-              NA
-              
-            }
-          }
-        }
-      })
-  
-  
-  results$inflationFactor <- reactive({
-        
-        if(is.null(input$inflation))
-          return( NA )
-        
-        
-        if(input$inflation){
-          
-          input$inflationFactor
-          
-        } else {
-          
-          NA
-          
-        }
-        
-      })
-  
-  
-  threeStageParameters <- c("varianceLevel1", "marginalPrevalence0", "marginalPrevalenceA",
-      "conditionalPrevalence0", "conditionalPrevalenceA")
-  
-  for(iParameter in threeStageParameters){
-    
-    local({
-          
-          iParameter <- iParameter
-          
-          results[[iParameter]] <- reactive({
-                
-                if(!is.null(input[[iParameter]])){
-                  
-                  input[[iParameter]]
-                  
-                } else {
-                  
-                  NA
-                  
-                }
-                
-              }) 
-        })
-  } 
-  
-  
-  # Define range of values for general parameters
-  # create results$sampleSize, results$desiredDifferenc and results$power
-  generalNames <- c("Total sample size" = "sampleSize", 
-      "Detectable difference" = "desiredDifference",
-      "Power" = "power")
-  
-  
-  for(iName in generalNames ){
-    
-    local({
-          
-          iName <- iName
-          names(iName) <- names(generalNames)[which(iName == generalNames)]
-          
-          results[[iName]] <- reactive({
-                
-                if(input$range != iName){
-                  
-                  if(iName == 'sampleSize'){
-                    
-                    adjustSampleSize(sampleSize = input$sampleSize,
-                        populationSize = input$populationSize,
-                        adjustFinitePopulation = input$finite, 
-                        inflationFactor = results$inflationFactor())
-                    
-                  } else {
-                    
-                    input[[iName]]
-                    
-                  }
-                  
-                } else {
-                  
-                  validate(need(input[[paste0("max",iName)]] & input[[paste0("min",iName)]],
-                              paste0("Please provide values for miminum and maximum of '", names(iName), "'")) %then%
-                          need(input[[paste0("max",iName)]] > input[[paste0("min",iName)]],
-                              paste0("Maximum should be larger than minimum of '", names(iName), "'")))
-                  
-                  if(iName == "sampleSize"){
-                    
-                    adjustedMin <- adjustSampleSize(sampleSize = input$minsampleSize,
-                        populationSize = input$populationSize,
-                        adjustFinitePopulation = input$finite, 
-                        inflationFactor = results$inflationFactor())
-                    adjustedMax <- adjustSampleSize(sampleSize = input$maxsampleSize,
-                        populationSize = input$populationSize,
-                        adjustFinitePopulation = input$finite, 
-                        inflationFactor = results$inflationFactor())
-                    
-                    seq(adjustedMin, adjustedMax, by = 1)
-                    
-                  } else {
-                    
-                    seq(input[[paste0("min",iName)]], input[[paste0("max",iName)]], by = 0.01)
-                    
-                  }
-                  
-                }
-                
-              })
-          
-        })
+    results[[paste0(name,"Updated")]] <- initDataFrame
     
   }
   
   
-  results$stratifiedInput <- reactive({
+  
+  ##rfDataFrame
+  observe({
         
-        if( is.null(input$loadedStratified) )
-          return ( NULL )
+        makeHotable(name = "rfDataFrame")
         
-        if(input$loadedStratified == "Enter data"){
-          
-          data <- hot.to.df(input$stratifiedInfo)
-          
-        } else {
-          
-          data <- results$dataStratified()
-          
-        }
+      })
+  
+  observeEvent(input$completeRisks,{
         
-        if(round(sum(data[,"Stratum proportion"], na.rm = TRUE), 1) != 1){
-          
-          populationSize <- sum(data[,"Stratum proportion"], na.rm  = TRUE)
-          data[,"Stratum proportion"] <- data[,"Stratum proportion"]/
-              populationSize
-          
-          observe(
-              updateNumericInput(session, inputId = "populationSize",
-                  value = populationSize)
-          )
-          
-        }
-        
-        return(data)
+        updateData(name = "rfDataFrame")
         
       })
   
   
-  results$twoStageInput <- reactive({
+  output$rfDataFrame <- renderHotable({ 
         
-        if( is.null(input$loadedTwoStage) | is.null(input$twoStagePanel) )
-          return( NULL )
+        results$rfDataFrameUpdated
         
+      }, readOnly = FALSE)  
+  
+  
+  # Convenience
+  output$convDataFrame <- renderHotable({ 
         
-        if(input$twoStagePanel == "option13") {
+        makeHotable(name = "convenience")
+        results$convenienceUpdated
+        
+      }, readOnly = FALSE)  
+  
+  
+  # Group Sensitivity
+  output$gseDataFrame <- renderHotable({ 
+        
+        makeHotable(name = "gse")
+        results$gseUpdated
+        
+      }, readOnly = FALSE)
+  
+  
+  
+  
+  
+#Define arguments for the ribess functions
+  
+  results$isRiskbased <- reactive({        
+        if(input$numRF >= 1) TRUE else FALSE
+      }) 
+  
+  results$maxn <- reactive({
+        if(input$convenienceSampling %in% c("no", "auto")) NA else input$maxn
+      })
+  
+  results$isSampledMaxn <- reactive({
+        if(input$convenienceSampling == "atMostNin1") FALSE else TRUE
+      })  
+  
+  
+  results$nMC <- reactive({
+        
+        if(any(results$isRandom())){
           
-          if(input$loadedTwoStage == "Enter data"){
+          input$nMC
+          
+        } else {
+          
+          1
+          
+        }
+      })
+  
+  
+  results$relativeRisks <- reactive({
+        
+        if(input$numRF > 0){
+          
+          listRisks <- makeRiskList(toExpand = 'Rr')
+          
+          if(input$asDataFrame != 'both'){
             
-            if(is.null(input$twoStage13Info))
-              return( NULL )
-            
-            twoStageInput <- hot.to.df(input$twoStage13Info)
+            expandRisks(listRisks)
             
           } else {
             
-            if( is.null(results$dataTwoStage()))
-              return( NULL )
+            values <- as.numeric(hot.to.df(input$rfDataFrame)[,"Relative risk"])
+            newNames <- helpExpandNames(inputList = listRisks)
             
-            twoStageInput <- results$dataTwoStage()
-            
-          }
-          
-          twoStageInput[,"Stratum variance"] <- NA
-          
-        } else {
-          
-          if(input$loadedTwoStage == "Enter data"){
-            
-            if(is.null(input$twoStage12Info))
-              return( NULL )
-            
-            twoStageInput <- hot.to.df(input$twoStage12Info)
-            
-          } else {
-            
-            if( is.null(results$dataTwoStage()))
-              return( NULL )
-            
-            twoStageInput <- results$dataTwoStage()
-            
-          }
-          
-          twoStageInput[,"Cluster variance"] <- NA
-          
-        }
-        
-        
-        if(round(sum(twoStageInput[,"Stratum proportion"], na.rm = TRUE), 1) != 1){
-          
-          populationSize <- sum(twoStageInput[,"Stratum proportion"], na.rm  = TRUE)
-          twoStageInput[,"Stratum proportion"] <- twoStageInput[,"Stratum proportion"]/
-              populationSize
-          
-          observe(
-              updateNumericInput(session, inputId = "populationSize",
-                  value = populationSize)
-          )
-          
-        }
-        
-        return( twoStageInput )
-        
-      })
-      
-      
-    
-  results$fixedInput <- reactive({
-        
-        parametersListActive <- 
-            switch(input$samplingDesign,
-                
-                "getSimpleRandom" = {
-                  
-                  list(sampleVariance = input$sampleVariance,
-                      populationSize = input$populationSize,
-                      adjustFinitePopulation = input$finite,
-                      inflationFactor = results$inflationFactor() )
-                  
-                },
-                
-                "getClustered" = {
-                  
-                  list( clusterSize = input$clusterSize,
-                      sampleVariance = input$sampleVarianceClustered,
-                      designEffect = results$designEffect(),
-                      correlation = input$correlation,
-                      clusterVariance = results$clusterVariance(), 
-                      conditionalPrevalence = input$conditionalPrevalence,
-                      populationSize = input$populationSize,
-                      adjustFinitePopulation = input$finite,
-                      inflationFactor = results$inflationFactor() )
-                  
-                },
-                
-                "getStratified" = {
-                  
-                  list( allocation = input$allocation,
-                      stratumProportions = results$stratifiedInput()[,"Stratum proportion"],
-                      stratumVariances = results$stratifiedInput()[,"Stratum variance"],
-                      populationSize = input$populationSize,
-                      adjustFinitePopulation = input$finite,
-                      inflationFactor = results$inflationFactor() )
-                  
-                  
-                },
-                
-                "getTwoStage" = {
-                  
-                  if( !is.null(results$twoStageInput()) ){
-                    
-                    list( clusterSize = input$clusterSize,
-                        stratumProportions = results$twoStageInput()[,"Stratum proportion"],
-                        stratumVariances = results$twoStageInput()[,"Stratum variance"],
-                        clusterVariances = results$twoStageInput()[,"Cluster variance"],
-                        designEffect = results$designEffect(),
-                        populationSize = input$populationSize,
-                        adjustFinitePopulation = input$finite,
-                        inflationFactor = results$inflationFactor() )
-                    
-                  } else {
-                    
-                    list()
-                    
-                  }
-                  
-                },
-                
-                "getThreeStage" = {
-                  
-                  list( marginalPrevalence0 = results$marginalPrevalence0(),
-                      marginalPrevalenceA = results$marginalPrevalenceA(),
-                      conditionalPrevalence0 = results$conditionalPrevalence0(),
-                      conditionalPrevalenceA = results$conditionalPrevalenceA(),
-                      sizeLevel3 = input$sizeLevel3,
-                      sizeLevel2 = input$sizeLevel2,
-                      sizeLevel1 = input$sizeLevel1,
-                      varianceLevel3 = input$varianceLevel3,
-                      varianceLevel2 = input$varianceLevel2,
-                      varianceLevel1 = results$varianceLevel1(),
-                      populationSize = input$populationSize,
-                      adjustFinitePopulation = input$finite,
-                      inflationFactor = results$inflationFactor())
-                  
-                },
-                
-                "getChangeOverTime" = {
-                  
-                  list(varianceCovariance = getVarianceCovariance(
-                          varianceCorrelation = as.data.frame(sapply(hot.to.df(input$correlationInfo), as.numeric))),
-                      populationSize = input$populationSize,
-                      adjustFinitePopulation = input$finite,
-                      inflationFactor = results$inflationFactor() )
-                }
-            )
-        
-        return( c(purpose = input$purpose, typeIerror = input$typeIerror, 
-                parametersListActive) )
-        
-      })
-  
-  results$randomInput <- reactive({
-        
-        as.list(expand.grid(
-                list( sampleSize = results$sampleSize(),
-                    desiredDifference = results$desiredDifference(), 
-                    power = results$power() ) 
-            )
-        )
-        
-      })
-  
-  
-  results$isMissing <- reactive({
-        
-        allMissing <- sapply(results$randomInput(), function(x) any(is.na(x)))
-        
-        if(input$purpose == "estimation") {
-          
-          allMissing[1:2]
-          
-        } else {
-          
-          allMissing
-          
-        }
-        
-      })
-  
-  
-  
-  results$allSampling <- eventReactive(input$submit, {
-        
-        isolate({
+            if(length(newNames) == length(values)){
               
-              tryCatch({
-                    
-                    wrapFunctionMilanzi( wrappedFunction = input$samplingDesign,
-                        randomInput = results$randomInput(),
-                        fixedInput = results$fixedInput())
-                    
-                  }, error = function(err) {
-                    
-                    return(err)
-                    
-                  })
+              names(values) <- newNames
+              
+            }
+            
+            values
+            
+          }
+          
+        }        
+        
+      })
+  
+  results$proportionsRiskGroups <- reactive({
+        
+        if(input$numRF > 0){
+          
+          listProportions <- makeRiskList(toExpand = 'Proportion')
+          
+          if(input$asDataFrame == 'none'){
+            
+            expandRisks(listProportions)
+            
+          } else {
+            
+            if(is.null(input$rfDataFrame)) return()
+            
+            values <- as.numeric(hot.to.df(input$rfDataFrame)[,"Proportion"])
+            newNames <- helpExpandNames(inputList = listProportions)
+            
+            if(length(newNames) == length(values)){
+              
+              names(values) <- newNames
+              
+            }
+            
+            values
+            
+          } 
+        }
+        
+      })
+  
+  
+  
+  
+# Run ribess functions
+  results$optimalBinom <- eventReactive(results$submitSample(), {
+        
+        tryCatch({
+              
+              if(input$toCalculate != "sensitivity"){
+                
+                if(input$convenienceSampling != "no"){
+                  
+                  validate("No results, unless 'No convenience sampling'")
+                  return( NULL )
+                  
+                } else {
+                  
+                  isolate( 
+                      wrapFunction(wrappedFunction = "optimizeSampleSizeGse",
+                          targetAse = input$Conf, 
+                          totalN = results$randomValuesN(), dp = input$DP,
+                          tse = results$randomValuesTSe(),
+                          method = "binom", isRiskbased = results$isRiskbased(),
+                          relativeRisks = results$relativeRisks(),
+                          proportionsRiskGroups = results$proportionsRiskGroups(),
+                          nMC = results$nMC()) 
+                  )
+                  
+                }                  
+                
+              } else {
+                
+                isolate( 
+                    wrapFunction(wrappedFunction = "getSampleSizeGse",
+                        sse = NA, 
+                        n = as.numeric(hot.to.df(input$gseDataFrame)[,"Sample Size"]), 
+                        totalN = results$randomValuesN(), dp = input$DP,
+                        tse = results$randomValuesTSe(),
+                        method = "binom", isRiskbased = results$isRiskbased(),
+                        relativeRisks = results$relativeRisks(),
+                        proportionsRiskGroups = results$proportionsRiskGroups(),
+                        nMC = results$nMC() ) 
+                )
+                
+              }
+              
+            }, error = function(err) {
+              
+              return(err)
               
             })
         
@@ -1008,233 +1135,105 @@ serverEstimatingGeneralParameters <- function(input, output, session){
   
   
   
-  results$tableHeader <- reactive({
+  results$optimalHyper <- eventReactive(results$submitSample(), {
         
-        if(!is.null( results$allSampling() )){
-          
-          isolate(
+        tryCatch({
               
-              switch(input$samplingDesign,
+              if(input$toCalculate != "sensitivity"){
+                
+                if(input$convenienceSampling == "no") {
                   
-                  "getSimpleRandom" = {
-                    
-                    list(designStatistics = names(generalNames))
-                    
-                  },
+                  isolate( 
+                      wrapFunction(wrappedFunction = "optimizeSampleSizeGse",
+                          targetAse = input$Conf, 
+                          totalN = results$randomValuesN(), dp = input$DP,
+                          tse = results$randomValuesTSe(),
+                          method = "hyper", isRiskbased = results$isRiskbased(),
+                          relativeRisks = results$relativeRisks(),
+                          proportionsRiskGroups = results$proportionsRiskGroups(),
+                          nMC = results$nMC() ) 
+                  )
                   
-                  "getClustered" = {
-                    
-                    list(designStatistics = c("Total number of clusters", names(generalNames)),
-                        sampleAllocation = c("Number of clusters in population", 
-                            "Number of clusters to sample"))
-                    
-                  },
-                  "getStratified" = {
-                    
-                    list(designStatistics = names(generalNames),
-                        sampleAllocation = c("Stratum proportion", "Stratum variance",
-                            "Stratum size in population", "Stratum size to sample"))
-                    
-                  },
+                } else {
                   
-                  "getTwoStage" = {
-                    
-                    if(input$twoStagePanel == "option13") {
-                      
-                      list(designStatistics = c("Total number of clusters", names(generalNames)),
-                          sampleAllocation = c("Stratum proportion", "Cluster variance", 
-                              "Number of clusters in population", "Number of clusters to sample",
-                              "Stratum size to sample"))
-                      
-                    } else if(input$twoStagePanel == "option12") {
-                      
-                      list(designStatistics = c("Total number of clusters", names(generalNames)),
-                          sampleAllocation = c("Stratum proportion", "Stratum variance",
-                              "Number of clusters in population", "Number of clusters to sample",
-                              "Stratum size to sample"))
-                      
-                    }
-                    
-                  },
+                  isolate( 
+                      wrapFunction(wrappedFunction = "getConvenience",
+                          targetAse = input$Conf, 
+                          inputConvenience = as.numeric(hot.to.df(input$convDataFrame)[,"Convenience"]), 
+                          maxn = results$maxn(), isSampledMaxn = results$isSampledMaxn(), 
+                          totalN = results$randomValuesN(), dp = input$DP,
+                          tse = results$randomValuesTSe(),
+                          method = "hyper", isRiskbased = results$isRiskbased(),
+                          relativeRisks = results$relativeRisks(),
+                          proportionsRiskGroups = results$proportionsRiskGroups(),
+                          nMC = results$nMC() ) 
+                  )
                   
-                  "getThreeStage" = {
-                    
-                    list(designStatistics = c(names(generalNames), 
-                            "Level III units", "Level II units", "Level I units"))
-                    
-                  },
-                  
-                  "getChangeOverTime" = {
-                    
-                    list(designStatistics = names(generalNames))
-                    
-                  }
-              )
-          )
-        }
+                }
+                
+              } else {
+                
+                isolate( 
+                    wrapFunction(wrappedFunction = "getSampleSizeGse",
+                        sse = NA, 
+                        n = as.numeric(hot.to.df(input$gseDataFrame)[,"Sample Size"]), 
+                        totalN = results$randomValuesN(), dp = input$DP,
+                        tse = results$randomValuesTSe(),
+                        method = "hyper", isRiskbased = results$isRiskbased(),
+                        relativeRisks = results$relativeRisks(),
+                        proportionsRiskGroups = results$proportionsRiskGroups(),
+                        nMC = results$nMC() ) 
+                )
+                
+              }
+              
+            }, error = function(err) {
+              
+              return(err)
+              
+            })
+        
       })
   
   
-  output$info <- renderUI({
+  
+  
+  results$summarizeInfo <- eventReactive(input$submit, {
         
-        validate(need(!is.null( results$allSampling() ), ""),
-            need( !any(attr(results$allSampling(), "class") == "error"), 
-                paste("Error:", (results$allSampling())$message)))
+        if(input$toCalculate != 'pFree'){
+          
+          randomParams <- c("Population size" = "populationSize",
+              "Sample size" = "sampleSize", 
+              "Group sensitivity" = "gse")
+          selected <- randomParams[2]
+          
+        } else {
+          
+          randomParams <- c("Prior probability of freedom" = "pFreePrior",
+              "Unadjusted prob. of freedom" = "pFree", 
+              "Global sensitivity" = "sse",
+              "Prob. of disease introduction" = "pIntro",
+              "Adjusted prob. of freedom" = "pFreeAdjusted")
+          selected <- randomParams[5]
+          
+        } 
         
-        
-        if(length(results$allSampling()) > 1){
+        if(results$nMC() > 1){
           
           list(
-              h3("General parameters"),
-              numericInput("nRows", "Number of steps", value = 5, min = 1, max = 50, step = 1)
+              
+              fluidRow(
+                  column(2, p(h4("Summarize results according to:"))),
+                  column(2, selectInput("drawParam", "parameter",
+                          choices = randomParams, selected = selected)),
+                  column(2, sliderInput("percentile", "Show table for percentile",
+                          min = 0, max = 1, value = 0.5))),
+              
+              tags$hr()
           )
           
         } else {
           
-          h3("General parameters")
-          
-        }
-        
-      })
-  
-  results$stratumNames <- reactive({
-        
-        if(input$samplingDesign == "getStratified"){
-          
-          results$stratifiedInput()[,"Stratum name"]
-          
-        } else if(input$samplingDesign == "getTwoStage"){
-          
-          results$twoStageInput()[,"Stratum name"]
-          
-        }
-        
-      })
-  
-  
-  results$designStatistics <- reactive({
-        
-        observe( updateNumericInput(session, "nRows", value = input$nRows) )
-        
-        if(is.null(results$allSampling()) )
-          return( NULL )
-        
-        
-        if( length(results$allSampling()) > 1 ){
-          
-          totalRows <- length(results$allSampling())
-          validate(need(input$nRows, "Please provide a valid 'Number of steps'"))
-          indices <- round(seq(1, totalRows, length.out = input$nRows))
-          
-          if(input$samplingDesign %in% c("getClustered", "getStratified", "getTwoStage")) {
-            
-            subSampling <- lapply(results$allSampling(), function(x) x$designStatistics)[indices]
-            
-          } else {
-            
-            subSampling <- results$allSampling()[indices]
-            
-          }
-          
-          helpOutput <- do.call(rbind.data.frame, subSampling)
-          
-        } else {
-          
-          if(input$samplingDesign %in% c("getClustered", "getStratified", "getTwoStage")) {
-            
-            helpOutput <- results$allSampling()[[1]]$designStatistics
-            
-          } else {
-            
-            helpOutput <- results$allSampling()[[1]]
-            
-          }
-          
-        }
-        
-        if( length(helpOutput) == 0 )
-          return( NULL )
-        
-        
-        if(length(results$tableHeader()$designStatistics) == ncol(helpOutput)){
-          
-          colnames(helpOutput) <- results$tableHeader()$designStatistics
-          
-        }
-        
-        if(input$purpose == "estimation") {
-          helpOutput <- helpOutput[ , !colnames(helpOutput) %in% "Power"]
-        }
-        
-        helpOutput
-        
-        
-      })
-  
-  results$sampleAllocationMax <- eventReactive(input$submit, {
-        
-        if(is.null(results$allSampling()))
-          return( NULL )
-        
-        if(input$samplingDesign %in% c("getClustered", "getStratified", "getTwoStage") &
-            length(results$allSampling()) > 1){
-          
-          helpOutput <- results$allSampling()[[length(results$allSampling())]]$sampleAllocation
-          colnames(helpOutput) <- results$tableHeader()$sampleAllocation
-          
-          if(is.na(input$populationSize)) {
-            
-            helpOutput <- helpOutput[, !colnames(helpOutput) %in% 
-                    c("Number of clusters in population", 
-                        "Stratum size in population")]
-            
-          }
-          
-          if(input$samplingDesign != "getClustered"){
-            
-            rownames(helpOutput) <- results$stratumNames()
-            
-          } 
-          
-          helpOutput
-          
-          
-        } else {
-          
-          NULL
-          
-        }
-        
-      })
-  
-  results$sampleAllocationMin <- eventReactive(input$submit, { 
-        
-        if(is.null(results$allSampling()))
-          return( NULL )
-        
-        if(input$samplingDesign %in% c("getClustered", "getStratified", "getTwoStage")){
-          
-          helpOutput <- results$allSampling()[[1]]$sampleAllocation
-          colnames(helpOutput) <- results$tableHeader()$sampleAllocation
-          
-          if(is.na(input$populationSize)) {
-            
-            helpOutput <- helpOutput[, !colnames(helpOutput) %in% 
-                    c("Number of clusters in population", 
-                        "Stratum size in population")]
-            
-          }
-          
-          if(input$samplingDesign != "getClustered"){
-            
-            rownames(helpOutput) <- results$stratumNames()
-            
-          }
-          
-          helpOutput
-          
-        } else {
-          
           NULL
           
         }
@@ -1242,346 +1241,324 @@ serverEstimatingGeneralParameters <- function(input, output, session){
       })
   
   
-  summarizeResults <- function(){
+  results$parameterSelected <- reactive({
+        
+        if(is.null(input$drawParam)){
+          
+          if(input$toCalculate != "pFree"){
+            
+            "sampleSize"
+            
+          } else {
+            
+            "pFreePrior"
+            
+          }
+          
+        } else {
+          
+          input$drawParam
+          
+        }
+      })
+  
+  
+  results$percentile <- reactive({
+        
+        if(is.null(input$percentile)){
+          
+          0.5
+          
+        } else {
+          
+          input$percentile
+          
+        }
+      })
+  
+  
+  summarizeResults <- function(method){
+    
+    if(method != "Pfree"){
+      
+      randomParams <- c("Population size" = "populationSize",
+          "Sample size" = "sampleSize", 
+          "Group sensitivity" = "gse")
+      submitValue <- results$submitSample()
+      
+    } else {
+      
+      randomParams <- c("Prior probability of freedom" = "pFreePrior",
+          "Unadjusted prob. of freedom" = "pFree", 
+          "Global sensitivity" = "sse",
+          "Prob. of disease introduction" = "pIntro",
+          "Adjusted prob. of freedom" = "pFreeAdjusted")
+      submitValue <- results$submitPfree()
+      
+    }
+    
+    results[[paste0("documentation", method)]] <- eventReactive(submitValue, {
+          
+          validate(need(!is.null( results[[paste0("optimal", method)]]() ), "No results available"),
+              need( !any(attr(results[[paste0("optimal", method)]](), "class") == "error"), 
+                  (results[[paste0("optimal", method)]]())$message))
+          
+          
+        })
     
     
     #Clear previous output
-    if( !is.null(input$submit)) {
-      
-      if(input$submit > 0){
+    if(!is.null(submitValue)){
+      if(submitValue > 0){
         
-        output$plotDesignStatistics <- renderPlot( NULL, height = "0px" )
-        output$plotSampleAllocation <- renderPlot( NULL, height = "0px" )
+        results[[paste0("table", method)]] <- reactive( NULL )
+        output[[paste0("drawHist", method)]] <- renderUI( NULL )
+        output[[paste0("commentHist", method)]] <- renderText( NULL )
         
       }
     }
     
-    if(!is.null(results$allSampling())){
-      if(!any(attr(results$allSampling(), "class") == "error")){
+    if(!is.null( results[[paste0("optimal", method)]]() )){
+      if( !any(attr(results[[paste0("optimal", method)]](), "class") == "error")){
         
-        output$warningTooSmall <- renderText({
-              
-#                  validate(need(!is.null(results$allSampling()), "No results available"),
-#                      need(!any(attr(results$allSampling(), "class") == "error"),
-#                          results$allSampling()$message))
-              
-              
-              if(any( results$designStatistics()[,"Total sample size"] > input$populationSize,
-                  na.rm = TRUE)){
-                
-                "Warning: The 'Total sample size' is larger than the 'Population size'"
-                
-              } else {
-                
-                NULL
-                
-              }
-              
-            })
-        
-        if(input$purpose == 'estimation'){
+        if(results$nMC() > 1){
           
-          documentation <- "Detectable difference: half width of the confidence interval"
+          reportedResults <- summaryWrapper( outputWrapper = results[[paste0("optimal", method)]](),
+              parameterName = results$parameterSelected(), 
+              percentile = results$percentile())
           
         } else {
           
-          documentation <- "Detectable difference: true difference in means that is tested for"
+          reportedResults <- results[[paste0("optimal", method)]]()[[1]]
           
         }
         
-        output$designStatistics <- renderTable({
-              
-              if(is.null(results$designStatistics()))
-                return( NULL )
-              
-              toReport <- results$designStatistics()
-              validate(need(!any(is.na(toReport)), 
-                      "No results are shown: Please check whether valid input values are provided for all 'Design-specific parameters'."))
-              toReport
-              
-            }, caption = documentation,
-            caption.placement = getOption("xtable.caption.placement", "bottom"),
-            digits = 3)
+        colnames(reportedResults) <- names(randomParams)
         
-        
-        output$downloadTableDesign <- downloadHandler(
-            filename = function() { "sampelatorDesign.csv" },
-            content = function(file) {
-              write.csv(results$designStatistics(), file)
-            })
-        
-        
-        if(length(results$allSampling()) > 1){
+        if(method != "Pfree"){
           
-          captionMin <- paste0("Table for minimum of '", 
-              names(generalNames)[which(generalNames == input$range)], "'")
+          rownames(reportedResults) <- NULL
           
-          captionMax <- paste0("Table for maximum of '", 
-              names(generalNames)[which(generalNames == input$range)], "'")
+          if(method == "Binom"){
+            
+            correctColumns <- 
+                reportedResults[,-which(colnames(reportedResults) %in% "Population size")]
+            
+          } else {
+            
+            correctColumns <- reportedResults
+            
+            results$choicesInitSse <- reactive({
+                  reportedResults[,which(colnames(reportedResults) %in% "Group sensitivity")]
+                })
+            
+          }
+          
+          if(nrow(correctColumns) > 1){
+            
+            toReport <- cbind(results$columnsRF(), correctColumns)
+            
+          } else {
+            
+            toReport <- correctColumns
+            
+          }
           
         } else {
           
-          captionMin <- ""
-          captionMax <- ""
+          rownames(reportedResults) <- paste0("Time period ", 1:nrow(reportedResults))
+          toReport <- reportedResults
           
         }
         
-        output$sampleAllocationMax <- renderTable({
-              
-              results$sampleAllocationMax()
-              
-            }, caption = captionMax,
-            caption.placement = getOption("xtable.caption.placement", "top"), 
-            caption.width = getOption("xtable.caption.width", NULL),
-            digits = 3)
-        
-        output$downloadTableSampleAllocationMax <- downloadHandler(
-            filename = function() { "sampelatorAllocationMax.csv" },
-            content = function(file) {
-              write.csv(results$sampleAllocationMax(), file)
-            })
-        
-        
-        
-        output$sampleAllocationMin <- renderUI({
-              
-              if(is.null(results$sampleAllocationMin())){
-                
-                return( NULL )
-                
-              }
+        results[[paste0("table", method)]] <- reactive({
               
               list(
+                  renderTable(
+                        
+                        toReport
+                        
+                      ),
                   
-                  h3("Sample allocation"),
-                  renderTable({
+                  renderText({
                         
-                        validate(need(!any(is.na(results$sampleAllocationMin())), 
-                                "No results are shown: Please check whether valid input values are provided for all 'Design-specific parameters'."))
+                        if(method != "Pfree"){
+                          
+                          paste("Total sample size:", 
+                              sum(reportedResults$sampleSize))
+                          
+                        } else {
+                          
+                          NULL
+                          
+                        }
                         
-                        results$sampleAllocationMin()
-                        
-                      }, caption = captionMin,
-                      caption.placement = getOption("xtable.caption.placement", "top"), 
-                      caption.width = getOption("xtable.caption.width", NULL),
-                      digits = 3),
+                      }),
                   
-                  downloadButton("downloadTableSampleAllocationMin", "Download")
+                  renderText({
+                        
+                        if(method != "Pfree"){
+                          
+                          paste("Global sensitivity:", 
+                              round(attr(reportedResults, "ase"), 2) )
+                          
+                        } else {
+                          
+                          NULL
+                          
+                        }
+                        
+                      }),
+                  
+                  downloadButton(paste0("downloadTable", method), "Download")
               )
-            })
-        
-        
-        output$downloadTableSampleAllocationMin <- downloadHandler(
-            filename = function() { "sampelatorAllocationMin.csv" },
-            content = function(file) {
-              write.csv(results$sampleAllocationMin(), file)
-            })
-        
-        
-#                  if( length(results$allSampling()) > 1 ){
-        
-        results$plotDesignStatistics <- eventReactive(input$submit, {
-              
-              if( input$range != "<none>" ){
-                
-                if(input$samplingDesign %in% c("getClustered", "getStratified", "getTwoStage")) {
-                  
-                  allDesignStatistics <- lapply(results$allSampling(), function(x) x$designStatistics)
-                  allSampleAllocation <- lapply(results$allSampling(), function(x) x$sampleAllocation)
-                  
-                } else {
-                  
-                  allDesignStatistics <- results$allSampling()
-                  
-                }
-                
-                xLimits <- sapply(allDesignStatistics, function(x) x[,input$range])
-                
-                xValues <- xLimits
-                yName <- generalNames[ which(results$isMissing()) ]
-                yValues <- sapply(allDesignStatistics, function(x) x[,yName])
-                group <- rep(names(yName), times = length(xLimits))
-                
-                if(input$samplingDesign == "getClustered"){
-                  
-                  xValues <- rep(xValues, times = 2)
-                  yValues <- c(yValues,
-                      sapply(allSampleAllocation, function(x) x[,"numberClusters"]))
-                  group <- c(group, rep("Number of clusters to sample", times = length(xLimits)))
-                  
-                } else if(input$samplingDesign == "getThreeStage" & 
-                    length(which(results$isMissing())) == 1){
-                  if(names(which(results$isMissing())) == "sampleSize"){
-                    
-                    xValues <- rep(xValues, times = 4)
-                    group <- c(group, rep(c("Level III units", "Level II units", 
-                                "Level I units"), each = length(xLimits)))
-                    toSelect <- c("sizeLevel3", "sizeLevel2", "sizeLevel1")
-                    
-                    for(iSelect in toSelect){
-                      
-                      iSelect <- iSelect
-                      yValues <- c(yValues, 
-                          sapply(allDesignStatistics, function(x) x[,iSelect]))
-                      
-                    }
-                  }
-                  
-                }
-                
-                data.frame(xValues = xValues, yValues = yValues,
-                    group = group)
-                
-              } else {
-                
-                NULL
-                
-              }
               
             })
+            
+            # Download data table
+            output[[paste0("downloadTable", method)]] <- downloadHandler(
+                filename = function() { paste0("ribess", method, ".csv") },
+                content = function(file) {
+                  write.csv(toReport, file)
+                })
         
         
-        output$plotDesignStatistics <- renderChart2({
-              
-              validate(need(results$plotDesignStatistics(), ""))
-              
-              plotDesign <- nPlot(yValues ~ xValues, 
-                  data = results$plotDesignStatistics(), 
-                  group = "group", type = 'lineChart')
-              
-              if(input$range == "sampleSize"){
-                plotDesign$xAxis(axisLabel = names(generalNames)[which(generalNames == input$range)])
-                plotDesign$yAxis(tickFormat = "#! function(d) {return d3.format(',.2f')(d)} !#")
-              } else {
-                plotDesign$xAxis(axisLabel = names(generalNames)[which(generalNames == input$range)],
-                    tickFormat = "#! function(d) {return d3.format(',.2f')(d)} !#")
-              }
-              
-              plotDesign$save(file.path(tempdir(), "design.html"),
-                  standalone = TRUE)
-              
-              return(plotDesign)
-              
-            })
-        
-        
-        output$downloadPlotDesign <- downloadHandler(
-            paste0("sampelatorDesign.html") ,
-            content = function(file) {
-              file.copy(file.path(tempdir(), "design.html"), file)
-            }
-        )
-        
-        output$commentDesignStatistics <- renderText({
-              
-              validate(need(results$plotDesignStatistics(), ""))
-              
-              dataDuplicated <- data.frame(matrix(results$plotDesignStatistics()$yValues, 
-                      ncol = length(unique(results$plotDesignStatistics()$group)),
-                      byrow = TRUE))
-              
-              idDuplicated <- which(duplicated(t(dataDuplicated)) | 
-                      duplicated(t(dataDuplicated), fromLast = TRUE))
-              
-              if(length(idDuplicated) > 1){
-                
-                return( paste("Warning: The lines coincide for",
-                        paste(unique(results$plotDesignStatistics()$group)[idDuplicated], 
-                            collapse = ", ")) )    
-                
-                
-                return( NULL )
-                
-              }
-              
-            })
-        
-        if(input$samplingDesign %in% c("getStratified", "getTwoStage")) {
+        if( results$nMC() > 1 ){
           
-          results$plotSampleAllocation <- eventReactive(input$submit, {
+          results[[paste0("dataPlot", method)]] <- reactive({
                 
-                if( input$range != "<none>" ){
-                  
-                  allDesignStatistics <- lapply(results$allSampling(), function(x) x$designStatistics)
-                  xLimits <- sapply(allDesignStatistics, function(x) x[,input$range])
-                  
-                  allSampleAllocation <- lapply(results$allSampling(), function(x) x$sampleAllocation)
-                  
-                  yValues <- as.vector(sapply(allSampleAllocation, function(x) x[,"stratumSize"]))
-                  nStrata <- dim(allSampleAllocation[[1]])[1]
-                  main <- "Stratum size"
-                  
-                  data.frame(yValues = yValues, xValues = rep(xLimits, each = nStrata),
-                      group = rep(results$stratumNames(), times = length(xLimits)))
-                  
-                } else {
-                  
-                  NULL
-                  
-                }
+                tryCatch({
+                      
+                      nGroups <- max(1, nrow(results[[paste0("optimal", method)]]()[[1]]))
+                      
+                      outputValues <- matrix(sapply(results[[paste0("optimal", method)]](), 
+                              function(x) x[[ results$parameterSelected() ]]), nrow = nGroups)
+                      
+                      if(method != "Pfree" & nrow(outputValues) > 1){
+                        outputValues <- rbind(outputValues, apply(outputValues, 2, sum))
+                      } 
+                      
+                      densityValues <- apply(outputValues, 1, 
+                          function(x){
+                            if(length(unique(x)) == 1) {
+                              data.frame(x = rep(unique(x), 2), y = c(0,NA))
+                            } else {
+                              density(x, na.rm = TRUE)
+                            }
+                          })
+                      
+                      yValues <- lapply(densityValues, function(element) element$y)
+                      xValues <- unlist(lapply(densityValues, function(element) element$x))
+                      groupSize <- sapply(yValues, length)
+                      yValues <- unlist(yValues)
+                      integratedValues <- unlist(lapply(densityValues, function(element){
+                                nLength <- length(element$y)
+                                c(0, cumsum((element$y[-1] + element$y[-nLength]) * 
+                                            (element$x[-1] - element$x[-nLength]) / 2))
+                              }))
+                      
+                      if(any(is.na(yValues))){
+                        
+                        yValues[which(is.na(yValues))] <- max(yValues, na.rm = TRUE)
+                        
+                      }
+                      
+                      if(nGroups > 1){
+                        if(method != "Pfree"){
+                          groupNames <- c(paste("Risk group", 1:nGroups), "Total")
+                        } else {
+                          groupNames <- paste("Time period", 1:nGroups) 
+                        }
+                        
+                      } else {
+                        groupNames <- "Total"
+                      }
+                      group <- rep(groupNames, times = groupSize)
+                      
+                      return( 
+                          data.frame(yValues = yValues, xValues = xValues, group = group,
+                              integratedValues = round(integratedValues, 2))
+                      ) 
+                      
+                    }, error = function(err) {
+                      
+                      return(NULL)
+                      
+                    })
                 
               })
           
           
-          output$plotSampleAllocation <- renderChart2({
+         output[[paste0("drawHist", method)]] <- renderChart2({
                 
-                validate(need(results$plotSampleAllocation(), ""))
-                
-                plotStrata <- nPlot( yValues ~ xValues, data = results$plotSampleAllocation(), group = "group",
-                    type = "lineChart")
-                
-                plotStrata$yAxis(axisLabel = "Stratum size")
-                if(input$range == "sampleSize"){
-                  plotStrata$xAxis(axisLabel = names(generalNames)[which(generalNames == input$range)])
-                } else {
-                  plotStrata$xAxis(axisLabel = names(generalNames)[which(generalNames == input$range)],
-                      tickFormat = "#! function(d) {return d3.format(',.2f')(d)} !#")
-                }
-                
-#                      plotStrata$chart(tooltipContent = "#! function(key, x, y){
-#                              return '<h3>' + key + '</h3>' + 
-#                              '<p>' + y + ' out of ' + x + '</p>'
-#                              } !#")
-                plotStrata$save(file.path(tempdir(), "sampleAllocation.html"),
-                    standalone = TRUE)
-      
-                return(plotStrata)
-                
+                plotRandom <- tryCatch({
+                      
+                      plotRandom <- nPlot( integratedValues ~ xValues, 
+                          data = results[[paste0("dataPlot", method)]](), 
+                          group = "group", type = "lineChart")
+                      
+                      plotRandom$xAxis(axisLabel = names(randomParams)[which(randomParams == results$parameterSelected())],
+                          tickFormat = "#! function(d) {return d3.format(',.2f')(d)} !#")
+                      plotRandom$yAxis(tickFormat = "#! function(d) {return d3.format(',.3f')(d)} !#")
+                      
+                      plotRandom$save(file.path(tempdir(), paste0("plot", method, ".html")),
+                          standalone = TRUE)
+                      #Area under the curve: seriously slows down -> not shown
+#                plotRandom$chart(tooltipContent = "#! function(key, x, y, e){
+#                        return '<h3>' + key + '</h3>' + 
+#                        '<p>' 'Area under the curve: ' + e.point.integratedValues + ' in ' + x + '</p>'
+#                        } !#")
+                      
+                      plotRandom                      
+                      
+                    }, error = function(err) {
+                      
+                      NULL
+                      
+                    })
                 
               })
           
-          
-          output$downloadPlotSampleAllocation <- downloadHandler(
-              paste0("sampelatorSampleAllocation.html") ,
+          output[[paste0("downloadPlot", method)]] <- downloadHandler(
+              paste0("ribess", method, ".html") ,
               content = function(file) {
-                file.copy(file.path(tempdir(), "sampleAllocation.html"), file)
+                file.copy(file.path(tempdir(), paste0("plot", method, ".html")),
+                    file)
               }
           )
           
-          output$commentSampleAllocation <- renderText({
+          
+          
+          output[[paste0("commentHist", method)]] <- renderText({
                 
-                validate(need(results$plotSampleAllocation(), ""))
-                
-                dataDuplicated <- data.frame(matrix(results$plotSampleAllocation()$yValues, 
-                        ncol = length(unique(results$plotSampleAllocation()$group)),
-                        byrow = TRUE))
-                
-                idDuplicated <- which(duplicated(t(dataDuplicated)) | 
-                        duplicated(t(dataDuplicated), fromLast = TRUE))
-                
-                if(length(idDuplicated) > 1){
-                  
-                  return( paste("Warning: The lines coincide for",
-                          paste(unique(results$plotSampleAllocation()$group)[idDuplicated], 
-                              collapse = ", ")) )    
-                  
-                } else {
-                  
-                  return( NULL )
-                  
-                }
+                tryCatch({
+                      
+                      dataDuplicated <- data.frame(matrix(results[[paste0("dataPlot", method)]]()$yValues, 
+                              ncol = length(unique(results[[paste0("dataPlot", method)]]()$group))))
+                      
+                      idDuplicated <- which(duplicated(t(dataDuplicated)) | 
+                              duplicated(t(dataDuplicated), fromLast = TRUE))
+                      
+                      if(length(idDuplicated) > 1){
+                        
+                        return( paste("Warning: The lines coincide for",
+                                paste(unique(results[[paste0("dataPlot", method)]]()$group)[idDuplicated], 
+                                    collapse = ", ")) )    
+                        
+                      } else {
+                        
+                        return( NULL )
+                        
+                      }
+                      
+                    }, error = function(err) {
+                      
+                      return(NULL)
+                      
+                    })
                 
               })
+          
         }
         
       }
@@ -1590,128 +1567,453 @@ serverEstimatingGeneralParameters <- function(input, output, session){
   }
   
   
-  
-  
-  
-  # Output UI
-  output$resultsToShow <- renderUI({
+# Output UI
+  output$resultsTable <- renderUI({
         
-        input$submit
-        
-        summarizeResults()
+        results$submitSample()
         
         isolate({
               
+              summarizeResults(method = "Binom")
+              summarizeResults(method = "Hyper")
+              
+              figuresList <- list(
+                  binom = tryCatch({
+                        
+                        showOutput("drawHistBinom", "nvd3")
+                        
+                      }, error = function(err) {
+                        
+                        NULL
+                        
+                      }),
+                  
+                  hyper = tryCatch({
+                        
+                        showOutput("drawHistHyper", "nvd3")
+                        
+                      }, error = function(err) {
+                        
+                        NULL
+                        
+                      })
+              )
+              
               list(
                   
-                  fluidRow(
-                      column(6,
-                          list(
-                              uiOutput("info"),
-                              tableOutput("designStatistics"),
-                              textOutput("warningTooSmall"),
-                              tags$head(tags$style("#warningTooSmall{color: red;
-                                          font-style: italic;
-                                          }")),
-                              downloadButton("downloadTableDesign", "Download")
-                          )
-                      ),
-                      column(6,
-                          list(
-                              showOutput("plotDesignStatistics", "nvd3"),
-                              textOutput("commentDesignStatistics"),
-                              downloadButton("downloadPlotDesign", "Download")
-                          )
-                      )
-                  ),
-                  
-                  tags$br(),
-                  tags$hr(),
+                  renderUI(results$summarizeInfo()),
                   
                   fluidRow(
                       column(6, 
                           list(
-                              uiOutput("sampleAllocationMin"),
-                              tableOutput("sampleAllocationMax"),
-                              downloadButton("downloadTableSampleAllocationMax", "Download"),
-                              tags$br()
+                              
+                              h3("Infinite population"),
+                              renderUI(results$documentationBinom()),
+                              renderUI(results$tableBinom())
                           )
-                      ),
-                      column(6,
+                      ), 
+                      
+                      column(6, 
                           list(
-                              showOutput("plotSampleAllocation", "nvd3"),
-                              textOutput("commentSampleAllocation"),
-                              downloadButton("downloadPlotSampleAllocation", "Download"),
-                              tags$br()
+                              
+                              h3("Finite population"),
+                              renderUI(results$documentationHyper()),
+                              renderUI(results$tableHyper())
                           )
                       )
-                  )
+                  ),
+                  
+                  
+                  if( (results$nMC() > 1) ){
+                        
+                        list(
+                            
+                            tags$br(), 
+                            tags$br(),    
+                            
+                            fluidRow(column(6, 
+                                    list(
+                                        figuresList[["binom"]],
+                                        textOutput("commentHistBinom"),
+                                        downloadButton("downloadPlotBinom", "Download")
+                                    )
+                                ),
+                                column(6, 
+                                    list(
+                                        figuresList[["hyper"]],
+                                        textOutput("commentHistHyper"),
+                                        downloadButton("downloadPlotHyper", "Download")
+                                    )
+                                )
+                            ),                                
+                            
+                            tags$br()  
+                        )
+                        
+                      } else {
+                        
+                        tags$br()
+                        
+                      }
               
               )
               
             })
+        
       })
   
   
   output$warnings <- renderUI({
         
-        if(input$samplingDesign == "getThreeStage"){
+        if(input$toCalculate != "pFree"){
           
-          validate(need( input$purpose == "testing", "This sampling approach does not support 'Purpose of the study: Estimation'"))
+          if(input$randomN == 'fixed'){
+            validate(need( input$N,
+                    "Please provide valid input value for 'Population size'"))
+          }
           
-        }
-        
-        messageMissing <- "Exactly one of 'General parameters' should be missing and is then estimated"
-        validate(need( sum( results$isMissing() ) == 1, messageMissing)) 
-        
-#        if(input$samplingDesign == "getClustered"){
-#          
-#          if( ((input$range != "sampleSize" & is.na(input$sampleSize)) |
-#                input$range == "sampleSize" & is.na(input$minsampleSize) & is.na(input$minsampleSize)) &
-#              !is.null(input$numberClusters) ){
-#            
-#            validate(need( is.na(input$numberClusters), "If 'Total sample size' is missing, the 'Number of clusters' should also be missing"))
-#            
-#          }
-#          
-#        }
-        
-        if(input$finite){
+          if(input$randomTSe == 'fixed'){
+            validate(need( input$TSe,
+                    "Please provide valid input value for 'Test sensitivity'"))
+          }
           
-          validate(need(input$populationSize,
-                  "Please provide a valid input value for 'Population size'"))
+          validate(need( input$DP,
+                  "Please provide valid input value for 'Design prevalence'"))
           
-        }
-        
-        if(input$inflation){
           
-          validate(need(input$inflationFactor,
-                  "Please provide a valid input value for 'Inflation factor'"))
-          
-        }
-        
-        
-        if(input$samplingDesign == "getThreeStage"){
-          
-          if((input$range != "sampleSize" && is.na(input$sampleSize)) ||
-              (input$range == "sampleSize" && is.na(input$minsampleSize) && is.na(input$minsampleSize))){
+          if(input$numRF > 0){
             
-            sizeMissing <- sapply(list(input$sizeLevel3, input$sizeLevel2, input$sizeLevel1), is.na)
-            validate(need( sum(sizeMissing) == 1, "If 'Total sample size' is missing, exactly one of 'Number of level III items sampled', '(Average) number sampled at level II' or 'at level I' should also be missing"))
+            if(!is.null(results$proportionsRiskGroups())){
+              
+              if(input$randomProportion == "fixed"){
+                
+                validate(need( !any(is.na(results$proportionsRiskGroups())),
+                        "Please provide valid input values for 'Proportion': no missing values are allowed."))
+                
+                validate(need( round(sum(results$proportionsRiskGroups()), 2) == 1,
+                        "Please provide valid input values for 'Proportion': the sum should be 1 per risk factor."))
+                
+              } else {
+                
+                validate(need( !any(apply(as.matrix(results$proportionsRiskGroups()), 1, is.na)),
+                        "Please provide valid input values for 'Proportion': no missing values are allowed."))
+                
+                validate(need( all(round(apply(as.matrix(results$proportionsRiskGroups()), 1, sum), 2) == 1),
+                        "Please provide valid input values for 'Proportion': the sum should be 1 per risk factor"))
+                
+              }
+            }
+            
+            if(!is.null(results$relativeRisks())){
+              
+              if(input$randomRr == "fixed"){
+                
+                validate(need( !any(is.na(results$relativeRisks())),
+                        "Please provide valid input values for 'Relative risk': no missing values are allowed."))
+                
+                if(input$asDataFrame != 'none'){
+                  
+                  validate(need( sum(results$relativeRisks() == 1) == 1,
+                          "Please provide valid input values for 'Relative risk': exactly one risk factor combination can have a relative risk of 1."))
+                  
+                } else {
+                  
+                  validate(need( sum(results$relativeRisks() == 1) == 1,
+                          "Please provide valid input values for 'Relative risk': per risk factor exactly one level can have a relative risk of 1."))
+                  
+                }
+                
+              } else {
+                
+                validate(need( !any(apply(as.matrix(results$relativeRisks()), 1, is.na)),
+                        "Please provide valid input values for 'Relative risk': no missing values are allowed."))
+                
+                for(i in 1:input$numRF){
+                  
+                  local({
+                        
+                        i <- i
+                        distributionTmp <- c()
+                        
+                        for(j in 1:input[[paste0('numLevels',i)]]) {
+                          
+                          distributionTmp[j] <- input[[paste0("distributionRr", i,'_',j)]]
+                          
+                        }
+                        
+                        validate(need( sum(distributionTmp == "reference") == 1,
+                                "Please define exactly one reference relative risk per risk factor"))
+                        
+                      }) 
+                }
+              }
+            }
             
           }
           
+        } else {
+          
+          validate(need(!is.na(results$initSse()), 
+                  "Please provide valid input value for 'Global sensitivity in time period 1'"), 
+              need(!any(is.na(results$randomValuesPfree0())), 
+                  "Please provide valid input value for 'Prior probability of freedom'"),
+              need(!any(is.na(results$randomValuesPintro())), 
+                  "Please provide valid input values for 'Probability of disease introduction'"))
         }
         
+        validate(need(results$nMC(), 
+                "Please provide valid input value for 'Number of random values'"))
+        
+        
         list(
-            busyIndicator("In progress", wait = 0),
+            busyIndicator("In progress",wait = 0),
             actionButton(inputId = "submit", label = "Submit", 
                 styleclass="primary", size="mini")
         )
         
+        
       })
   
   
-  source("serverCollectingSamples.R", local = TRUE)
+  
+  
+  
+  
+#Calculate pFree
+  
+  
+  output$pIntroTable <- renderUI({
+        
+        validate(need(input$nPeriods, "Please provide a value for 'Number of time periods'"))
+        
+        pTimes <- list()
+        
+        for (i in seq_len(input$nPeriods)) {
+          
+          pTimes[[i]] <- fluidRow(
+              
+              column(3, selectInput(paste0("randomPintro", i), label = paste0('Time period ', i), 
+                      choices = c("fixed",
+                          "random - enter distribution quantiles" = "randomKnownQ",
+                          "random - enter distribution parameters" = "randomKnownPar")),
+                  offset = 1),
+              
+              column(3,
+                  
+                  conditionalPanel(paste0("input.randomPintro", i, " == 'fixed'"),
+                      numericInput(inputId = paste0('Pintro', i), label = "Value",
+                          value = 0.2)
+                  ),
+                  
+                  conditionalPanel(paste0("input.randomPintro", i, " == 'randomKnownQ'"),
+                      list(matrixInput(inputId = paste0("qPintro", i), label = "Probability - Quantile", 
+                              data = quantileStart),
+                          uiOutput(paste0("qPintro", i, "Info"))
+                      )
+                  ),
+                  
+                  conditionalPanel(paste0("input.randomPintro", i, " == 'randomKnownPar'"),
+                      list(
+                          selectInput(paste0("distributionPintro", i), label = "Distribution",
+                              choices = c("uniform" = "unif", "normal" = "norm", "beta", "gamma")),
+                          uiOutput(paste0("parametersTablePintro", i))
+                      )
+                  )
+              
+              ),
+              
+              column(4, conditionalPanel(paste0("input.randomPintro", i, " != 'fixed'"),
+                      plotOutput(paste0("plotPintro", i))
+                  )
+              )
+          )
+          
+        }
+        
+        pTimes
+        
+      })
+  
+  
+  results$randomValuesPintro <- reactive({
+        
+        local({
+              
+              randomValues <- matrix(NA, nrow = results$nMC(), ncol = input$nPeriods)
+              isFixed <- rep(FALSE, input$nPeriods)
+              
+              for(i in 1:input$nPeriods) {
+                
+                i <- i
+                iName <- results$pIntroNames()[i]
+                
+                if(input[[paste0('random', iName)]] == "fixed"){
+                  
+                  randomValues[,i] <- rep(results[[paste0("randomValues", iName)]](), times = results$nMC())
+                  isFixed[i] <- TRUE
+                  
+                } else {
+                  
+                  randomValues[,i] <- results[[paste0("randomValues", iName)]]()
+                  
+                }
+              }
+              
+              if(all(isFixed)) {
+                
+                randomValues[1,]
+                
+              } else {
+                
+                attr(randomValues, "random") <- TRUE
+                randomValues
+                
+              }
+              
+            })
+        
+      })
+  
+  results$initSse <- reactive({
+        
+        if(!input$sampleFromResults){
+          
+          input$initSse
+          
+        } else {
+          
+          results$selectedInitSse()
+          
+        }
+        
+      })
+  
+  
+  
+  results$optimalPfree <- eventReactive(results$submitPfree(), { 
+        
+        tryCatch({
+              isolate( 
+                  wrapFunction( wrappedFunction = "calculatePfree",
+                      targetPFree = input$Conf, 
+                      pFreePrior = results$randomValuesPfree0(),
+                      pIntro = results$randomValuesPintro(), 
+                      sse = results$initSse(), 
+                      timePoints = input$nPeriods,
+                      nMC = results$nMC() ))
+            },  error = function(err) {
+              
+              return(err)
+              
+            })
+        
+      })
+  
+  
+  
+  
+  
+  output$resultsPfree <- renderUI({
+        
+        results$submitPfree()
+        
+        isolate({
+              
+              summarizeResults(method = "Pfree")
+              
+              list(
+                  
+                  renderUI(results$summarizeInfo()),
+                  
+                  renderUI(results$documentationPfree()),
+                  
+                  renderUI(results$tablePfree()),
+                  
+                  
+                  if( (results$nMC() > 1) ){
+                        
+                        list(
+                            
+                            tags$br(), 
+                            tags$br(),    
+                            
+                            showOutput("drawHistPfree", "nvd3"),
+                            
+                            textOutput("commentHistPfree"),
+                            downloadButton("downloadPlotPfree", "Download"),
+                            
+                            tags$br()  
+                        )
+                        
+                      } else {
+                        
+                        tags$br()
+                        
+                      }
+              )
+              
+            })
+        
+      })
+  
+  
+  output$riskGroupNames <- renderUI({
+        
+        inputList <- makeRiskList(toExpand = 'names')
+        riskGroupsNames <- helpExpandNames(inputList = inputList, toPaste = TRUE)
+        
+        if(length(riskGroupsNames) == 0){
+          
+          NULL  
+          
+        } else {
+          
+          selectInput("selectInitSse", "for selected risk group:",
+              choices = riskGroupsNames)
+          
+        }
+        
+      })
+  
+  # TODO Option <all> to calculate for all risk groups at once?
+  
+  results$selectedInitSse <- reactive({
+        
+        inputList <- makeRiskList(toExpand = 'names')
+        riskGroupsNames <- helpExpandNames(inputList = inputList, toPaste = TRUE)
+        
+        if(length(riskGroupsNames) == 0){
+          
+          results$choicesInitSse()
+          
+        } else {
+          
+          selectedInitSse <- results$choicesInitSse()[which(riskGroupsNames == input$selectInitSse)]
+          selectedInitSse
+          
+        }        
+        
+      })
+  
+  
+  output$selectedInitSse <- renderText({
+        
+        
+        selectedInitSse <- tryCatch({
+              
+              round(results$selectedInitSse(), 2)
+              
+            }, error = function(err) {
+              
+              return("No values available")
+              
+            })
+        
+        return(selectedInitSse)
+        
+      })
+  
   
 }
+
+serverFunction
