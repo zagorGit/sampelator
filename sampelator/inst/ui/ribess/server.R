@@ -1,7 +1,16 @@
 #http://walkerke.github.io/2014/03/tfr-in-europe/
 #install.packages("base64enc")
 #devtools::install_github('rCharts', 'ramnathv', ref='dev')
-library(sampelator)
+# library(sampelator)
+
+scriptdir = '../../../R'
+list.files(scriptdir)
+source(file.path(scriptdir, 'collectingSamples.R'))
+source(file.path(scriptdir, 'ribessFunctions.R'))
+source(file.path(scriptdir, 'runRibess.R'))
+source(file.path(scriptdir, 'runSampelator.R'))
+source(file.path(scriptdir, 'sampelatorFunctions.R'))
+
 library(rCharts) #for interactive plots
 options(RCHART_WIDTH = 800)
 
@@ -9,7 +18,7 @@ library(shinyIncubator)  #for matrixInput
 
 library(shinysky)  #for hotable
 
-`%then%` <- shiny:::`%OR%`
+# `%then%` <- shiny:::`%OR%`
 
 quantileStart <- data.frame(matrix(c(0.25, 0.75, "", ""), nrow = 2, ncol = 2))
 
@@ -440,8 +449,8 @@ serverFunction <- function(input,output,session){
                       if(input[[paste0("random", iBaseName)]] == "randomKnownQ") {
                         
                         quantileMatrix <- input[[paste0("q", iParameter)]]
-                        validate(need(!any(is.na(quantileMatrix)), "Please enter distribution quantiles.") %then%
-                                need(quantileMatrix[,1] == sort(quantileMatrix[,1]), "Please sort probabilities from small to large.") %then%
+                        validate(need(!any(is.na(quantileMatrix)), "Please enter distribution quantiles.") | # %then%
+                                need(quantileMatrix[,1] == sort(quantileMatrix[,1]), "Please sort probabilities from small to large.") | # %then%
                                 need(quantileMatrix[,2] == sort(quantileMatrix[,2]), "Please sort quantiles from small to large."))
                         
                         return( getBestDistribution(probabilities = quantileMatrix[,1], 
